@@ -1,0 +1,19 @@
+name: geog313-final-project
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - jupyterlab=4.2.5
+  - pystac-client=0.7.5
+  - leafmap=0.38.5
+  - matplotlib
+  - dask=2024.9.1
+  - dask-labextension
+  - distributed=2024.9.1
+  - stackstac=0.5.0
+  - numpy
+  - pandas
+  - xarray
+  - rasterio
+  - geopandas
+  - shapely
