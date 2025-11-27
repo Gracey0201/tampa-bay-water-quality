@@ -1,0 +1,6 @@
+Ignore system / temp / notebook checkpoints
+.config/
+.ipynb_checkpoints/
+.jupyter/
+.local/
+
