@@ -1,6 +1,15 @@
-Ignore system / temp / notebook checkpoints
+# Python cache
+__pycache__/
+*.pyc
+
+# IPython/Jupyter temp files
+.ipython/
+.cache/
+
+# Existing ignores
 .config/
 .ipynb_checkpoints/
 .jupyter/
 .local/
+
 
