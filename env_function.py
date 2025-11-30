@@ -1,98 +1,71 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "5b03094c-e22b-4cc6-bfee-eb026835240e",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import numpy as np\n",
-    "import xarray as xr\n",
-    "from pystac_client import Client as StacClient\n",
-    "import stackstac\n",
-    "from typing import Dict, List\n",
-    "\n",
-    "def environmental_variables(\n",
-    "    bbox: tuple,\n",
-    "    start_date: str,\n",
-    "    end_date: str,\n",
-    "    variables: List[str] = (\"sst\", \"precipitation\"),\n",
-    ") -> Dict[str, xr.DataArray]:\n",
-    "    \"\"\"\n",
-    "    Retrieve and process environmental variables (SST, Precipitation)\n",
-    "    over a bounding box and time range, returning mean time series.\n",
-    "    \"\"\"\n",
-    "\n",
-    "    stacks: Dict[str, xr.DataArray] = {}\n",
-    "\n",
-    "    for var in variables:\n",
-    "        if var == \"sst\":\n",
-    "            stac_url = \"https://cmr.earthdata.nasa.gov/stac/LANCEMODIS\"\n",
-    "            collection = \"MODIS_Aqua_L3SM_SST\"\n",
-    "            assets = [\"sst\"]\n",
-    "            res = 4000  # 4 km (in meters, if using projected CRS)\n",
-    "        elif var == \"precipitation\":\n",
-    "            stac_url = \"https://planetarycomputer.microsoft.com/api/stac/v1\"\n",
-    "            collection = \"GPM_3IMERG\"      # check exact collection id\n",
-    "            assets = [\"precipitation\"]     # check exact asset key\n",
-    "            res = 10000  # 10 km\n",
-    "        else:\n",
-    "            raise ValueError(f\"Variable {var} not supported.\")\n",
-    "\n",
-    "        epsg = 32617  # Tampa Bay UTM zone 17N\n",
-    "\n",
-    "        client = StacClient.open(stac_url)\n",
-    "        search = client.search(\n",
-    "            collections=[collection],\n",
-    "            bbox=bbox,\n",
-    "            datetime=f\"{start_date}/{end_date}\",\n",
-    "            max_items=500,\n",
-    "        )\n",
-    "        items = search.item_collection()\n",
-    "\n",
-    "        if len(items) == 0:\n",
-    "            print(f\"No items found for {var}.\")\n",
-    "            stacks[var] = None\n",
-    "            continue\n",
-    "\n",
-    "        stack = stackstac.stack(\n",
-    "            items,\n",
-    "            assets=assets,\n",
-    "            bounds_latlon=bbox,\n",
-    "            epsg=epsg,\n",
-    "            resolution=res,\n",
-    "            chunksize=4096,\n",
-    "            rescale=False,\n",
-    "            fill_value=np.nan,\n",
-    "        )\n",
-    "\n",
-    "        # average over spatial domain\n",
-    "        stacks[var] = stack.mean(dim=[\"x\", \"y\"])\n",
-    "\n",
-    "    return stacks\n"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.11.14"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import numpy as np
+import xarray as xr
+from pystac_client import Client as StacClient
+import stackstac
+from typing import Dict
+
+def environmental_variables(
+    bbox: tuple,
+    start_date: str,
+    end_date: str,
+    variables: list = ["sst", "precipitation"]
+) -> Dict[str, xr.DataArray]:
+    """
+    Retrieve and process environmental variables (SST, Precipitation)
+    over a bounding box and time range.
+
+    Returns:
+        dict: Keys are variable names, values are xarray.DataArray of mean values over time.
+    """
+    
+    stacks = {}
+    
+    for var in variables:
+        if var == "sst":
+            collection = "noaa-cdr-sea-surface-temperature-optimum-interpolation"
+            assets = ["sst"]
+            res = 25000  # 25km
+
+        elif var == "precipitation":
+            collection = "noaa-mrms-qpe-1h-pass2"  #  738 items!
+            assets = ["precipitation"]
+            res = 1000   # 1km radar
+            
+        else:
+            raise ValueError(f"Variable {var} not supported.")
+        
+        stac_url = "https://planetarycomputer.microsoft.com/api/stac/v1"
+        epsg = 32617  # Tampa Bay UTM zone 17N
+        
+        # Connect to STAC
+        client = StacClient.open(stac_url)
+        items = client.search(
+            collections=[collection],
+            bbox=bbox,
+            datetime=f"{start_date}/{end_date}",
+            max_items=5000  # Increased for hourly MRMS
+        ).item_collection()
+        
+        if len(items) == 0:
+            print(f"No items found for {var}.")
+            stacks[var] = None
+            continue
+        
+        print(f"Found {len(items)} items for {var}")
+        
+        # Stack into xarray
+        stack = stackstac.stack(
+            items,
+            assets=assets,
+            bounds_latlon=bbox,
+            epsg=epsg,
+            resolution=res,
+            chunksize=4096,
+            rescale=False,
+            fill_value=np.nan
+        )
+        
+        # Compute spatial mean
+        stacks[var] = stack.mean(dim=["x", "y"])
+    
+    return stacks

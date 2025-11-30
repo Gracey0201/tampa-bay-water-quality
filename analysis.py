@@ -1,143 +1,109 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "183b7ccb-95ca-4956-b09b-e069a9f3ccbc",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import numpy as np\n",
-    "import pandas as pd\n",
-    "import xarray as xr\n",
-    "import matplotlib.pyplot as plt\n",
-    "import seaborn as sns\n",
-    "from sklearn.decomposition import PCA\n",
-    "\n",
-    "# -------------------------------\n",
-    "# 1 Temporal Analysis Functions\n",
-    "# -------------------------------\n",
-    "\n",
-    "def compute_monthly_seasonal_means(data: xr.DataArray) -> dict:\n",
-    "    \"\"\"\n",
-    "    Compute monthly and seasonal averages for a DataArray.\n",
-    "    \n",
-    "    Parameters\n",
-    "    ----------\n",
-    "    data : xr.DataArray\n",
-    "        Time series data with 'time' dimension.\n",
-    "    \n",
-    "    Returns\n",
-    "    -------\n",
-    "    dict\n",
-    "        Dictionary with keys 'monthly', 'seasonal' containing aggregated DataArrays.\n",
-    "    \"\"\"\n",
-    "    monthly = data.groupby('time.month').mean(dim='time')\n",
-    "    seasonal = data.groupby('time.season').mean(dim='time')\n",
-    "    return {'monthly': monthly, 'seasonal': seasonal}\n",
-    "\n",
-    "\n",
-    "def plot_time_series(data: xr.DataArray, variable_name: str):\n",
-    "    \"\"\"\n",
-    "    Plot a time series for a given variable.\n",
-    "    \n",
-    "    Parameters\n",
-    "    ----------\n",
-    "    data : xr.DataArray\n",
-    "        Time series data\n",
-    "    variable_name : str\n",
-    "        Name of the variable for title/labeling\n",
-    "    \"\"\"\n",
-    "    df = data.to_dataframe(name=variable_name).reset_index()\n",
-    "    plt.figure(figsize=(12, 6))\n",
-    "    plt.plot(df['time'], df[variable_name], marker='o', linestyle='-')\n",
-    "    plt.title(f\"{variable_name} Time Series\")\n",
-    "    plt.xlabel(\"Time\")\n",
-    "    plt.ylabel(variable_name)\n",
-    "    plt.grid(True)\n",
-    "    plt.show()\n",
-    "\n",
-    "\n",
-    "def plot_seasonal_cycle(data: xr.DataArray, variable_name: str):\n",
-    "    \"\"\"\n",
-    "    Plot seasonal averages for a variable.\n",
-    "    \"\"\"\n",
-    "    seasonal_means = data.groupby('time.season').mean(dim='time')\n",
-    "    plt.figure(figsize=(8,5))\n",
-    "    seasonal_means.plot(marker='o', linestyle='--')\n",
-    "    plt.title(f\"{variable_name} Seasonal Cycle\")\n",
-    "    plt.show()\n",
-    "\n",
-    "\n",
-    "# -------------------------------\n",
-    "# 2 Correlation and Statistics\n",
-    "# -------------------------------\n",
-    "\n",
-    "def compute_correlation_matrix(wqi_data: pd.DataFrame, env_data: pd.DataFrame) -> pd.DataFrame:\n",
-    "    \"\"\"\n",
-    "    Compute Pearson correlation between water quality indices and environmental variables.\n",
-    "    \"\"\"\n",
-    "    combined = pd.concat([wqi_data, env_data], axis=1)\n",
-    "    return combined.corr()\n",
-    "\n",
-    "\n",
-    "def compute_rmse(predicted: np.ndarray, observed: np.ndarray) -> float:\n",
-    "    \"\"\"\n",
-    "    Compute RMSE between predicted and observed arrays.\n",
-    "    \"\"\"\n",
-    "    return np.sqrt(np.mean((observed - predicted)**2))\n",
-    "\n",
-    "\n",
-    "# -------------------------------\n",
-    "# 3 PCA Analysis\n",
-    "# -------------------------------\n",
-    "\n",
-    "def compute_pca(wqi_data: pd.DataFrame, env_data: pd.DataFrame, n_components: int = 2) -> dict:\n",
-    "    \"\"\"\n",
-    "    Compute PCA to identify co-variation between WQI and environmental variables.\n",
-    "    \n",
-    "    Returns dict with PCA model, scores, and loadings\n",
-    "    \"\"\"\n",
-    "    combined = pd.concat([wqi_data, env_data], axis=1).dropna()\n",
-    "    pca = PCA(n_components=n_components)\n",
-    "    scores = pca.fit_transform(combined)\n",
-    "    loadings = pd.DataFrame(\n",
-    "        pca.components_.T, \n",
-    "        index=combined.columns, \n",
-    "        columns=[f'PC{i+1}' for i in range(n_components)]\n",
-    "    )\n",
-    "    return {'model': pca, 'scores': scores, 'loadings': loadings}\n",
-    "\n",
-    "\n",
-    "def plot_pca_results(loadings: pd.DataFrame):\n",
-    "    \"\"\"\n",
-    "    Plot PCA loadings for variables.\n",
-    "    \"\"\"\n",
-    "    loadings.plot(kind='bar', figsize=(10,6))\n",
-    "    plt.title(\"PCA Loadings\")\n",
-    "    plt.show()"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.11.14"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import numpy as np
+import pandas as pd
+import xarray as xr
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.decomposition import PCA
+
+# -------------------------------
+# 1 Temporal Analysis Functions
+# -------------------------------
+
+def compute_monthly_seasonal_means(data: xr.DataArray) -> dict:
+    """
+    Compute monthly and seasonal averages for a DataArray.
+    
+    Parameters
+    ----------
+    data : xr.DataArray
+        Time series data with 'time' dimension.
+    
+    Returns
+    -------
+    dict
+        Dictionary with keys 'monthly', 'seasonal' containing aggregated DataArrays.
+    """
+    monthly = data.groupby('time.month').mean(dim='time')
+    seasonal = data.groupby('time.season').mean(dim='time')
+    return {'monthly': monthly, 'seasonal': seasonal}
+
+
+def plot_time_series(data: xr.DataArray, variable_name: str):
+    """
+    Plot a time series for a given variable.
+    
+    Parameters
+    ----------
+    data : xr.DataArray
+        Time series data
+    variable_name : str
+        Name of the variable for title/labeling
+    """
+    df = data.to_dataframe(name=variable_name).reset_index()
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['time'], df[variable_name], marker='o', linestyle='-')
+    plt.title(f"{variable_name} Time Series")
+    plt.xlabel("Time")
+    plt.ylabel(variable_name)
+    plt.grid(True)
+    plt.show()
+
+
+def plot_seasonal_cycle(data: xr.DataArray, variable_name: str):
+    """
+    Plot seasonal averages for a variable.
+    """
+    seasonal_means = data.groupby('time.season').mean(dim='time')
+    plt.figure(figsize=(8,5))
+    seasonal_means.plot(marker='o', linestyle='--')
+    plt.title(f"{variable_name} Seasonal Cycle")
+    plt.show()
+
+
+# -------------------------------
+# 2 Correlation and Statistics
+# -------------------------------
+
+def compute_correlation_matrix(wqi_data: pd.DataFrame, env_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute Pearson correlation between water quality indices and environmental variables.
+    """
+    combined = pd.concat([wqi_data, env_data], axis=1)
+    return combined.corr()
+
+
+def compute_rmse(predicted: np.ndarray, observed: np.ndarray) -> float:
+    """
+    Compute RMSE between predicted and observed arrays.
+    """
+    return np.sqrt(np.mean((observed - predicted)**2))
+
+
+# -------------------------------
+# 3 PCA Analysis
+# -------------------------------
+
+def compute_pca(wqi_data: pd.DataFrame, env_data: pd.DataFrame, n_components: int = 2) -> dict:
+    """
+    Compute PCA to identify co-variation between WQI and environmental variables.
+    
+    Returns dict with PCA model, scores, and loadings
+    """
+    combined = pd.concat([wqi_data, env_data], axis=1).dropna()
+    pca = PCA(n_components=n_components)
+    scores = pca.fit_transform(combined)
+    loadings = pd.DataFrame(
+        pca.components_.T, 
+        index=combined.columns, 
+        columns=[f'PC{i+1}' for i in range(n_components)]
+    )
+    return {'model': pca, 'scores': scores, 'loadings': loadings}
+
+
+def plot_pca_results(loadings: pd.DataFrame):
+    """
+    Plot PCA loadings for variables.
+    """
+    loadings.plot(kind='bar', figsize=(10,6))
+    plt.title("PCA Loadings")
+    plt.show()
