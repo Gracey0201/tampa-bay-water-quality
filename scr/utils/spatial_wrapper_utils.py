@@ -1,6 +1,6 @@
 import xarray as xr
 import matplotlib.pyplot as plt
-import seaborn as sns
+#import seaborn as sns
 import numpy as np
 import geopandas as gpd
 from rasterio import features
