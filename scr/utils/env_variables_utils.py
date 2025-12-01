@@ -1,71 +1,116 @@
-import numpy as np
+# env_utils.py
 import xarray as xr
-from pystac_client import Client as StacClient
-import stackstac
-from typing import Dict
+import matplotlib.pyplot as plt
+import pooch
+import os
 
-def environmental_variables(
-    bbox: tuple,
-    start_date: str,
-    end_date: str,
-    variables: list = ["sst", "precipitation"]
-) -> Dict[str, xr.DataArray]:
+# ---------------------------------------------------------
+# 1. ENVIRONMENTAL DATASETS
+# ---------------------------------------------------------
+def environmental_variables():
+    """Return dictionary describing SST and precipitation datasets."""
+    return {
+        "sst": {
+            "name": "Sea Surface Temperature (GISTEMP/ERSSTv5)",
+            "url": "https://data.giss.nasa.gov/pub/gistemp/gistemp1200_GHCNv4_ERSSTv5.nc.gz",
+            "var": "tempanomaly",  # adjust to correct variable name in GISTEMP
+        },
+        "precipitation": {
+            "name": "Monthly Precipitation (CMAP)",
+            "url": "https://psl.noaa.gov/thredds/dodsC/Datasets/cmap/enh/cmap_enh.nc",
+            "var": "precip",
+        }
+    }
+
+# ---------------------------------------------------------
+# 2. LOAD TIME SERIES
+# ---------------------------------------------------------
+def load_env_timeseries(bbox, variables=None, cache_dir="data"):
     """
-    Retrieve and process environmental variables (SST, Precipitation)
-    over a bounding box and time range.
+    Load monthly mean environmental variable time series over a bounding box.
+
+    Parameters:
+        bbox: [min_lon, min_lat, max_lon, max_lat]
+        variables: list of strings ("sst", "precipitation") or None for both
+        cache_dir: folder to store downloaded SST file
 
     Returns:
-        dict: Keys are variable names, values are xarray.DataArray of mean values over time.
+        dict of xarray DataArrays with spatial mean time series
     """
-    
-    stacks = {}
-    
+    min_lon, min_lat, max_lon, max_lat = bbox
+    env = environmental_variables()
+
+    if variables is None:
+        variables = list(env.keys())
+
+    timeseries = {}
+
     for var in variables:
         if var == "sst":
-            stac_url = "https://cmr.earthdata.nasa.gov/stac/LANCEMODIS"
-            collection = "MODIS_Aqua_L3SM_SST"
-            assets = ["sst"]
-            res = 4000  # 4 km
-        elif var == "precipitation":
-            stac_url = "https://planetarycomputer.microsoft.com/api/stac/v1"
-            collection = "GPM_3IMERG"
-            assets = ["precipitation"]
-            res = 10000  # 10 km
+            # Download and decompress SST using pooch
+            os.makedirs(cache_dir, exist_ok=True)
+            local_file = pooch.retrieve(
+                env[var]["url"],
+                processor=pooch.Decompress(),
+                known_hash=None,
+                path=cache_dir
+            )
+            ds = xr.open_dataset(local_file)
         else:
-            raise ValueError(f"Variable {var} not supported.")
-        
-        epsg = 32617  # Tampa Bay UTM zone 17N
-        
-        # Connect to STAC
-        client = StacClient.open(stac_url)
-        items = client.search(
-            collections=[collection],
-            bbox=bbox,
-            datetime=f"{start_date}/{end_date}",
-            max_items=500
-        ).item_collection()
-        
-        if len(items) == 0:
-            print(f"No items found for {var}.")
-            stacks[var] = None
-            continue
-        
-        # Stack into xarray
-        stack = stackstac.stack(
-            items,
-            assets=assets,
-            bounds_latlon=bbox,
-            epsg=epsg,
-            resolution=res,
-            chunksize=4096,
-            rescale=False,
-            fill_value=np.nan
+            # Precipitation loads from remote URL
+            ds = xr.open_dataset(env[var]["url"])
+
+        da = ds[env[var]["var"]].sel(
+            lon=slice(min_lon, max_lon),
+            lat=slice(min_lat, max_lat)
         )
-        
-        # Compute spatial mean
-        stacks[var] = stack.mean(dim=["x", "y"])
-    
-    return stacks
-s[var] = stack.mean(dim=["x", "y"])  # average over spatial domain
-    
-    return stacks
+
+        # Spatial mean over bounding box
+        timeseries[var] = da.mean(dim=["lat", "lon"])
+
+    return timeseries
+
+# ---------------------------------------------------------
+# 3. LOAD SEASONAL CYCLE
+# ---------------------------------------------------------
+def load_env_seasonal(bbox, variables=None):
+    """
+    Compute seasonal cycle (Winter/Spring/Summer/Fall) for SST & precipitation.
+    """
+    ts_dict = load_env_timeseries(bbox, variables)
+    seasonal = {}
+    for var, da in ts_dict.items():
+        da = da.resample(time="M").mean()
+        seasonal[var] = da.groupby("time.season").mean()
+    return seasonal
+
+# ---------------------------------------------------------
+# 4. PLOTTING FUNCTIONS
+# ---------------------------------------------------------
+def plot_env_timeseries(timeseries_dict):
+    """Plot monthly time series for SST and precipitation."""
+    plt.figure(figsize=(12, 5))
+    for var, da in timeseries_dict.items():
+        plt.plot(da['time'], da, label=var.upper())
+    plt.title("Environmental Variable Time Series")
+    plt.xlabel("Time")
+    plt.ylabel("Value")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def plot_env_seasonal(seasonal_dict):
+    """Plot seasonal mean cycle (DJF, MAM, JJA, SON)."""
+    plt.figure(figsize=(10, 5))
+    for var, da in seasonal_dict.items():
+        seasons = list(da['season'].values)
+        values = da.values
+        plt.plot(seasons, values, marker="o", label=var.upper())
+    plt.title("Seasonal Climatology (DJF, MAM, JJA, SON)")
+    plt.xlabel("Season")
+    plt.ylabel("Mean Value")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
