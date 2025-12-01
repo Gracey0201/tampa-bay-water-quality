@@ -17,3 +17,7 @@ dependencies:
   - rasterio
   - geopandas
   - shapely
+  - rioxarray
+  - netcdf4
+  - h5netcdf
+  - pooch
