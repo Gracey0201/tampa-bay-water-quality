@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
-import seaborn as sns
+#import seaborn as sns
 from sklearn.decomposition import PCA
 
 def workflow_analysis(wqi_data: xr.DataArray, env_data: pd.DataFrame, variable_name: str):
