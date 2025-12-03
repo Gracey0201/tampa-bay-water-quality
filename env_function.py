@@ -43,7 +43,7 @@ def environmental_variables(
             signed_items = [pc.sign(item) for item in items]
 
             try:
-                # 🎯 FINAL FIX: Use stackstac's native grid and xarray/rasterio for clipping/scaling.
+                # Use stackstac's native grid and xarray/rasterio for clipping/scaling.
                 # This bypasses incompatible keyword arguments.
                 stack = stackstac.stack(
                     signed_items,
