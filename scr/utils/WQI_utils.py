@@ -1,5 +1,3 @@
-### Task 1 - Develop Function(s) to Plot NDWI Time Series
-
 ## import libraries
 import json
 from shapely.geometry import shape
@@ -11,7 +9,7 @@ from pystac_client import Client as StacClient
 import stackstac
 import matplotlib.pyplot as plt
 
-def main(
+def wqi_indices(
     bbox: tuple,
     start_date: str,
     end_date: str,
@@ -19,7 +17,7 @@ def main(
 ) -> None:
 
     """
-Generate a time series plot of NDWI from Sentinel-2 data within a specified bounding box and date range.
+Generate a time series plot of NDCI from Sentinel-2 data within a specified bounding box and date range.
 
 Args:
     bbox (tuple): Coordinates as (minx, miny, maxx, maxy).
@@ -28,7 +26,7 @@ Args:
     filter_clouds (bool): Remove cloudy pixels if True using the SCL band.
 
 Returns:
-    None. Produces a plot of NDWI over time.
+    None. Produces a plot of NDCI over time.
    """
 
 
@@ -68,45 +66,45 @@ Returns:
 
 
     ## Calculate mean NDWI from xarray stack
-    def calculate_mean_ndwi(
+    def calculate_mean_ndci(
         stack: xr.DataArray,
         filter_clouds: bool,
     ) -> xr.DataArray:
-        ## Calculate NDWI = (green - nir) / (green + nir)
-        green = stack.sel(band="green")
-        nir = stack.sel(band="nir")
-        ndwi = (green - nir) / (green + nir)
+        ## Calculate NDcI = (green - nir) / (green + nir)
+        rededge3 = stack.sel(band="rededge3")
+        red = stack.sel(band="red")
+        ndci = (rededge3 - red) / (rededge3 + red)
 
         if filter_clouds:
             ## Filter cloudy pixels using SCL bands
             scl = stack.sel(band="scl")
             valid_mask = ~scl.isin([3, 8, 9, 10])
-            ndwi = ndwi.where(valid_mask)
+            ndci = ndci.where(valid_mask)
 
-        mean_ndwi = ndwi.mean(dim=["x", "y"])
-        return mean_ndwi
+        mean_ndci = ndci.mean(dim=["x", "y"])
+        return mean_ndci
 
     ## Plot NDWI time series
-    def plot_ndwi_time_series(mean_ndwi: xr.DataArray) -> None:
+    def plot_ndci_time_series(mean_ndci: xr.DataArray) -> None:
         # Ensure the DataArray has a name for the NDWI values
-        mean_ndwi.name = "ndwi"
+        mean_ndci.name = "ndci"
 
         ## Convert xarray DataArray to pandas DataFrame for better handling
-        df = mean_ndwi.to_dataframe().reset_index()
+        df = mean_ndci.to_dataframe().reset_index()
 
         ## Validate the DataFrame structure
-        if "ndwi" not in df.columns or "time" not in df.columns:
-            raise KeyError("Expected columns 'ndwi' and 'time' in the DataFrame.")
+        if "ndci" not in df.columns or "time" not in df.columns:
+            raise KeyError("Expected columns 'ndci' and 'time' in the DataFrame.")
 
         ## Generate the plot
         plt.figure(figsize=(12, 6))
-        plt.plot(df["time"], df["ndwi"], marker="o", linestyle="--", color="blue", label="Mean NDWI")
+        plt.plot(df["time"], df["ndci"], marker="o", linestyle="--", color="blue", label="Mean NDCI")
 
         ## Add grid, labels, title and legend
         plt.grid(color="gray", linestyle="--", linewidth=0.5, alpha=0.7)
         plt.xlabel("Time", fontsize=12)
-        plt.ylabel("Mean NDWI", fontsize=12)
-        plt.title("NDWI Time Series", fontsize=14, fontweight="bold")
+        plt.ylabel("Mean NDCI", fontsize=12)
+        plt.title("NDCI Time Series", fontsize=14, fontweight="bold")
 
         plt.legend(loc="upper right", fontsize=10)
 
@@ -126,7 +124,7 @@ Returns:
         print("No items found for given parameters.")
         return
 
-    assets = ["green", "nir", "scl"]
+    assets = ["rededge3", "red", "scl"]
     stack = stack_and_clip(items, assets, bbox)
-    mean_ndwi = calculate_mean_ndwi(stack, filter_clouds)
-    plot_ndwi_time_series(mean_ndwi)
+    mean_ndci = calculate_mean_ndci(stack, filter_clouds)
+    plot_ndci_time_series(mean_ndci)
