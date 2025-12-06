@@ -1,92 +1,131 @@
-import numpy as np
 import xarray as xr
-from erddapy import ERDDAP
-import stackstac
-from pystac_client import Client as StacClient
+import numpy as np
+from pystac_client import Client
 import planetary_computer as pc
-from typing import Dict, List, Tuple, Optional
+import stackstac
 
 def environmental_variables(
-    bbox: Tuple[float, float, float, float],
-    start_date: str,
-    end_date: str,
-    variables: List[str] = ["sst", "precip"],
-) -> Dict[str, Optional[xr.DataArray]]:
-    results: Dict[str, Optional[xr.DataArray]] = {}
-    min_lon, min_lat, max_lon, max_lat = bbox
+    bbox,
+    start_date,
+    end_date,
+    variables=["sst", "precip"]
+):
+    """
+    Hybrid environmental variable loader:
+    - SST from NOAA OISST daily (OPeNDAP, multiple per-year files; lon 0–360)
+    - Precip from MRMS (Planetary Computer STAC)
 
-    # -------------------------------------------------
-    # SST from NOAA ERDDAP (FULL HISTORICAL 1981-present)
-    # -------------------------------------------------
+    bbox = (min_lon, min_lat, max_lon, max_lat) in -180..180
+    start_date, end_date = "YYYY-MM-DD"
+    """
+
+    results = {}
+
+    # -----------------------------------
+    # 1. SST FROM OPeNDAP (NOAA OISST)
+    # -----------------------------------
     if "sst" in variables:
-        print("\nFetching SST from NOAA ERDDAP...")
+        print("\n Fetching SST from NOAA OISST (OPeNDAP)...")
+
         try:
-            e = ERDDAP(
-                server="https://coastwatch.pfeg.noaa.gov/erddap",  # Historical server
-                protocol="griddap"
+            start_year = int(start_date[:4])
+            end_year = int(end_date[:4])
+
+            urls = [
+                (
+                    "https://psl.noaa.gov/thredds/dodsC/"
+                    f"Datasets/noaa.oisst.v2.highres/sst.day.mean.{year}.nc"
+                )
+                for year in range(start_year, end_year + 1)
+            ]
+
+            # Open all needed years and combine by coordinates
+            ds = xr.open_mfdataset(urls, combine="by_coords")
+
+            # Unpack bbox
+            min_lon, min_lat, max_lon, max_lat = bbox
+
+            # OISST longitudes are 0–360, so convert western hemisphere
+            if min_lon < 0:
+                min_lon_360 = min_lon + 360
+                max_lon_360 = max_lon + 360
+            else:
+                min_lon_360, max_lon_360 = min_lon, max_lon
+
+            # Slice spatially and temporally
+            sst_region = ds["sst"].sel(
+                time=slice(start_date, end_date),
+                lat=slice(min_lat, max_lat),
+                lon=slice(min_lon_360, max_lon_360)
             )
-            e.dataset_id = "erdMBsstd1day"  # FULL HISTORICAL COVERAGE
-            
-            constraints = {
-                "time>=": f"{start_date}T00:00:00Z",
-                "time<=": f"{end_date}T23:59:59Z",
-                "latitude>=": min_lat,
-                "latitude<=": max_lat,
-                "longitude>=": min_lon,
-                "longitude<=": max_lon,
-            }
-            
-            e.constraints = constraints
-            e.variables = ["sst"]
-            e.griddap_initialize()
-            
-            sst_ds = e.to_xarray()
-            print(f"SST timesteps from ERDDAP: {sst_ds.sizes.get('time', 0)}")
-            
-            # Already in °C, just spatial mean
-            sst_mean = sst_ds["sst"].mean(dim=["latitude", "longitude"])
+
+            # Mask fill values if present
+            fill = ds["sst"].attrs.get("_FillValue", None)
+            if fill is not None:
+                sst_region = sst_region.where(sst_region != fill)
+
+            # Daily mean over bbox
+            sst_mean = sst_region.mean(dim=["lat", "lon"])
+
+            # Drop all-NaN times
+            if "time" in sst_mean.dims:
+                sst_mean = sst_mean.dropna("time", how="all")
+
             sst_mean.name = "sst"
-            
-            print(f"SST final: {sst_mean.time.size} days")
             results["sst"] = sst_mean
-            
+
+            print(f"✔ SST loaded: {sst_mean.sizes.get('time', 0)} days")
+
         except Exception as e:
-            print(f"SST ERDDAP failed: {e}")
+            print(f" SST load failed: {e}")
             results["sst"] = None
 
-    # -------------------------------------------------
-    # Precip from Planetary Computer
-    # -------------------------------------------------
+    # -----------------------------------
+    # 2. PRECIP FROM PLANETARY COMPUTER
+    # -----------------------------------
     if "precip" in variables:
-        print("\nSearching for precip (NOAA MRMS)...")
+        print("\n Fetching Precipitation (NOAA MRMS)...")
+
         try:
-            client = StacClient.open("https://planetarycomputer.microsoft.com/api/stac/v1")
-            collection = "noaa-mrms-qpe-24h-pass2"
-            assets = ["cog"]
-            
+            client = Client.open(
+                "https://planetarycomputer.microsoft.com/api/stac/v1",
+                modifier=pc.sign_inplace
+            )
+
             search = client.search(
-                collections=[collection],
+                collections=["noaa-mrms-qpe-24h-pass2"],
                 datetime=f"{start_date}/{end_date}",
                 bbox=bbox,
-                max_items=2000,
+                limit=1000
             )
+
             items = list(search.items())
             print(f"Found {len(items)} precip items")
-            
-            signed_items = [pc.sign(item) for item in items]
-            stack = stackstac.stack(
-                signed_items,
-                assets=assets,
-                epsg=4326,
-                fill_value=np.nan,
-            )
-            da = stack.mean(dim=["x", "y"]).squeeze()
-            da.name = "precip"
-            print(f"Precip: {len(da.time)} days")
-            results["precip"] = da
-            
+
+            if len(items) == 0:
+                results["precip"] = None
+            else:
+                signed = [pc.sign(i) for i in items]
+
+                precip_stack = stackstac.stack(
+                    signed,
+                    assets=["cog"],
+                    epsg=4326,
+                    fill_value=np.nan
+                )
+
+                precip_mean = precip_stack.mean(dim=["x", "y"]).squeeze()
+                precip_mean.name = "precip"
+
+                # Drop any all-NaN time steps just to be safe
+                if "time" in precip_mean.dims:
+                    precip_mean = precip_mean.dropna("time", how="all")
+
+                results["precip"] = precip_mean
+                print(f"✔ Precip loaded: {precip_mean.sizes.get('time', 0)} days")
+
         except Exception as e:
-            print(f"Precip failed: {e}")
+            print(f" Precip load failed: {e}")
             results["precip"] = None
 
     return results
