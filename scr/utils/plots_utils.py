@@ -5,105 +5,48 @@ import matplotlib.pyplot as plt
 #import seaborn as sns
 from sklearn.decomposition import PCA
 
-# -------------------------------
-# 1️⃣ Temporal Analysis Functions
-# -------------------------------
 
-def compute_monthly_seasonal_means(data: xr.DataArray) -> dict:
+def plot_indices_analysis(indices_dict, smooth_window=7):
     """
-    Compute monthly and seasonal averages for a DataArray.
-    
-    Parameters
-    ----------
-    data : xr.DataArray
-        Time series data with 'time' dimension.
-    
-    Returns
-    -------
-    dict
-        Dictionary with keys 'monthly', 'seasonal' containing aggregated DataArrays.
+    Plot smoothed time series and seasonal cycle for all water quality indices (NDWI, NDTI, NDCI).
+
+    Parameters:
+        indices_dict : dict
+            Dictionary returned by wqi()['indices']
+            Must contain 'NDWI', 'NDTI', 'NDCI' with 'time_series' keys
+        smooth_window : int
+            Rolling window size in days for smoothing the time series (default=7)
     """
-    monthly = data.groupby('time.month').mean(dim='time')
-    seasonal = data.groupby('time.season').mean(dim='time')
-    return {'monthly': monthly, 'seasonal': seasonal}
+    indices = ["NDWI", "NDTI", "NDCI"]
 
+    for index in indices:
+        ts = indices_dict[index]["time_series"]
+        df = ts.to_dataframe(name="value").reset_index()
+        df["month"] = df["time"].dt.month
 
-def plot_time_series(data: xr.DataArray, variable_name: str):
-    """
-    Plot a time series for a given variable.
-    
-    Parameters
-    ----------
-    data : xr.DataArray
-        Time series data
-    variable_name : str
-        Name of the variable for title/labeling
-    """
-    df = data.to_dataframe(name=variable_name).reset_index()
-    plt.figure(figsize=(12, 6))
-    plt.plot(df['time'], df[variable_name], marker='o', linestyle='-')
-    plt.title(f"{variable_name} Time Series")
-    plt.xlabel("Time")
-    plt.ylabel(variable_name)
-    plt.grid(True)
-    plt.show()
+        # Apply rolling mean to smooth the time series
+        df["value_smooth"] = df["value"].rolling(window=smooth_window, center=True).mean()
 
+        # Seasonal cycle: monthly average from raw values
+        monthly_avg = df.groupby("month")["value"].mean()
 
-def plot_seasonal_cycle(data: xr.DataArray, variable_name: str):
-    """
-    Plot seasonal averages for a variable.
-    """
-    seasonal_means = data.groupby('time.season').mean(dim='time')
-    plt.figure(figsize=(8,5))
-    seasonal_means.plot(marker='o', linestyle='--')
-    plt.title(f"{variable_name} Seasonal Cycle")
-    plt.show()
+        # Create a figure with 2 subplots: time series and seasonal cycle
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Smoothed time series
+        axes[0].plot(df["time"], df["value_smooth"], color="tab:blue")
+        axes[0].set_title(f"{index} Smoothed Time Series ({smooth_window}-day rolling)")
+        axes[0].set_xlabel("Date")
+        axes[0].set_ylabel("Index Value")
+        axes[0].grid(True)
 
+        # Seasonal cycle
+        axes[1].plot(monthly_avg.index, monthly_avg.values, marker="o", color="tab:orange")
+        axes[1].set_title(f"{index} Seasonal Cycle")
+        axes[1].set_xlabel("Month")
+        axes[1].set_ylabel("Average Index Value")
+        axes[1].set_xticks(range(1, 13))
+        axes[1].grid(True)
 
-# -------------------------------
-# 2️⃣ Correlation and Statistics
-# -------------------------------
-
-def compute_correlation_matrix(wqi_data: pd.DataFrame, env_data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute Pearson correlation between water quality indices and environmental variables.
-    """
-    combined = pd.concat([wqi_data, env_data], axis=1)
-    return combined.corr()
-
-
-def compute_rmse(predicted: np.ndarray, observed: np.ndarray) -> float:
-    """
-    Compute RMSE between predicted and observed arrays.
-    """
-    return np.sqrt(np.mean((observed - predicted)**2))
-
-
-# -------------------------------
-# 3️⃣ PCA Analysis
-# -------------------------------
-
-def compute_pca(wqi_data: pd.DataFrame, env_data: pd.DataFrame, n_components: int = 2) -> dict:
-    """
-    Compute PCA to identify co-variation between WQI and environmental variables.
-    
-    Returns dict with PCA model, scores, and loadings
-    """
-    combined = pd.concat([wqi_data, env_data], axis=1).dropna()
-    pca = PCA(n_components=n_components)
-    scores = pca.fit_transform(combined)
-    loadings = pd.DataFrame(
-        pca.components_.T, 
-        index=combined.columns, 
-        columns=[f'PC{i+1}' for i in range(n_components)]
-    )
-    return {'model': pca, 'scores': scores, 'loadings': loadings}
-
-
-def plot_pca_results(loadings: pd.DataFrame):
-    """
-    Plot PCA loadings for variables.
-    """
-    loadings.plot(kind='bar', figsize=(10,6))
-    plt.title("PCA Loadings")
-    plt.show()
+        plt.tight_layout()
+        plt.show()
