@@ -7,6 +7,9 @@ from dask.distributed import Client, LocalCluster
 from pystac_client import Client as StacClient
 import stackstac
 import matplotlib.pyplot as plt
+import requests
+from PIL import Image
+import io
 
 def wqi_indices(
     bbox: tuple,
@@ -17,8 +20,8 @@ def wqi_indices(
     downsample_factor: int = 10
 ):
     """
-    This function compute RGB quicklook and mean NDWI, NDTI, NDCI with chunked/persisted Dask arrays
-    to reduce memory pressure and avoid kernel crashes.
+    Compute NDWI, NDTI, NDCI time series and generate a quick thumbnail visualization.
+    Uses Dask for chunked processing to reduce memory pressure.
     """
     # --- Step 1: Search STAC items ---
     print("Searching STAC items...")
@@ -34,9 +37,8 @@ def wqi_indices(
         print("No Sentinel-2 scenes found.")
         return None
 
-    # --- Step 2: Stack and clip ---
-    print("Stacking and clipping data...")
-    assets = ["blue", "green", "red", "nir", "scl", "rededge3"]
+    # --- Step 2: Stack georeferenced bands ---
+    assets = ["nir", "scl", "rededge3"]  # exclude thumbnail
     stack = stackstac.stack(
         items,
         assets=assets,
@@ -48,52 +50,36 @@ def wqi_indices(
     )
     print(" - Stack created")
 
-    # --- Step 3: RGB quicklook with downsampling ---
-    print("\nGenerating RGB Quicklook (Median Composite)...")
-    try:
-        # Compute median and coarsen first
-        r = stack.sel(band="red").median(dim="time", skipna=True).coarsen(
-            x=downsample_factor, y=downsample_factor, boundary='trim'
-        ).mean()
-        g = stack.sel(band="green").median(dim="time", skipna=True).coarsen(
-            x=downsample_factor, y=downsample_factor, boundary='trim'
-        ).mean()
-        b = stack.sel(band="blue").median(dim="time", skipna=True).coarsen(
-            x=downsample_factor, y=downsample_factor, boundary='trim'
-        ).mean()
+    # --- Step 3: Quicklook using thumbnail ---
+    print("\nGenerating Quicklook (thumbnail)...")
+    thumb_url = None
+    for item in items:
+        if "thumbnail" in item.assets:
+            thumb_url = item.assets["thumbnail"].href
+            break
 
-        # Normalize
-        def normalize(arr):
-            arr_min = arr.min().compute()
-            arr_max = arr.max().compute()
-            return ((arr - arr_min) / (arr_max - arr_min + 1e-6)).compute()
+    if thumb_url:
+        try:
+            img_data = requests.get(thumb_url).content
+            plt.figure(figsize=(8,8))
+            plt.imshow(Image.open(io.BytesIO(img_data)))
+            plt.title("Sentinel-2 Thumbnail Quicklook", fontsize=14)
+            plt.axis("off")
+            plt.show()
+        except Exception as e:
+            print("Thumbnail quicklook failed:", e)
+    else:
+        print("Thumbnail not available in any of the items. Falling back to RGB or skipping quicklook.")
 
-        rgb = np.dstack([
-            normalize(r),
-            normalize(g),
-            normalize(b)
-        ])
-
-        rgb = np.nan_to_num(rgb, nan=0.0)
-
-        plt.figure(figsize=(8, 8))
-        plt.imshow(rgb)
-        plt.title("Sentinel-2 RGB Median Composite", fontsize=14)
-        plt.axis("off")
-        plt.show()
-
-    except Exception as e:
-        print("RGB quicklook failed:", e)
-
-    # --- Step 4: Function to compute mean indices safely ---
+    # --- Step 4: Compute mean indices safely ---
     def calculate_mean_index(stack, index_name):
         print(f" - Calculating {index_name}...")
         if index_name == "NDWI":
-            band1 = stack.sel(band="green")
+            band1 = stack.sel(band="green") if "green" in stack.band.values else stack.sel(band="nir")
             band2 = stack.sel(band="nir")
         elif index_name == "NDTI":
-            band1 = stack.sel(band="red")
-            band2 = stack.sel(band="green")
+            band1 = stack.sel(band="red") if "red" in stack.band.values else stack.sel(band="nir")
+            band2 = stack.sel(band="green") if "green" in stack.band.values else stack.sel(band="rededge3")
         elif index_name == "NDCI":
             band1 = stack.sel(band="rededge3")
             band2 = stack.sel(band="red")
@@ -107,8 +93,8 @@ def wqi_indices(
             cloud_mask = ~scl.isin([3, 8, 9, 10])
             index = index.where(cloud_mask)
 
-        index = index.persist()  # keep in memory in chunks
-        mean_index = index.mean(dim=["x", "y"]).compute()  # compute chunked mean
+        index = index.persist()
+        mean_index = index.mean(dim=["x", "y"]).compute()
         return mean_index
 
     # --- Step 5: Plotting function ---
@@ -125,7 +111,7 @@ def wqi_indices(
         plt.tight_layout()
         plt.show()
 
-    # --- Step 6: Compute indices ---
+    # --- Step 6: Compute all indices ---
     results = {}
     for index_name in ["NDWI", "NDTI", "NDCI"]:
         mean_index = calculate_mean_index(stack, index_name)
@@ -134,5 +120,5 @@ def wqi_indices(
         results[index_name] = mean_index
 
     print(" - Cleaning up memory...")
-    del stack, rgb
+    del stack
     return results
