@@ -1,130 +1,137 @@
-## import libraries
-import json
-from shapely.geometry import shape
 import numpy as np
 import pandas as pd
-import xarray as xr
-from dask.distributed import Client, LocalCluster
+import warnings
 from pystac_client import Client as StacClient
 import stackstac
-import matplotlib.pyplot as plt
+import calendar
+import xarray as xr
 
-def wqi_indices(
-    bbox: tuple,
-    start_date: str,
-    end_date: str,
-    filter_clouds: bool = True,
-) -> None:
+# Tampa Bay extents (WGS84 lon/lat)
+TBEP_BBOX = (-82.8, 27.5, -82.2, 28.1)
+TBEP_TRIAL_BBOX = (-82.55, 27.75, -82.45, 27.85)
 
+def normalized_diff(b1, b2):
+    """Compute normalized difference (b1-b2)/(b1+b2)."""
+    return (b1 - b2) / (b1 + b2 + 1e-10)
+
+def compute_wqi_indices(
+    bbox=TBEP_TRIAL_BBOX,
+    start_date="2019-01-01",
+    end_date="2024-12-31",
+    max_items=500,
+    epsg=32617,
+    filter_clouds=True,
+    export_csv=False,
+    output_path="wqi_results.csv",
+    anomaly_detection=False,
+    rolling_window=3
+):
     """
-Generate a time series plot of NDCI from Sentinel-2 data within a specified bounding box and date range.
+    Compute NDWI, NDTI, NDCI mean & median for a bounding box and date range.
+    bbox must be (min_lon, min_lat, max_lon, max_lat) in WGS84.
+    """
 
-Args:
-    bbox (tuple): Coordinates as (minx, miny, maxx, maxy).
-    start_date (str): Start of analysis period, 'YYYY-MM-DD'.
-    end_date (str): End of analysis period, 'YYYY-MM-DD'.
-    filter_clouds (bool): Remove cloudy pixels if True using the SCL band.
+    client = StacClient.open("https://earth-search.aws.element84.com/v1")
+    items = client.search(
+        collections=["sentinel-2-l2a"],
+        bbox=bbox,
+        datetime=f"{start_date}/{end_date}",
+        max_items=max_items
+    ).item_collection()
 
-Returns:
-    None. Produces a plot of NDCI over time.
-   """
-
-
-    ## Query STAC API for Sentinel-2 images within the bbox and date range
-    def search_stac_items(
-        bbox: tuple,
-        start_date: str,
-        end_date: str,
-    ) -> list:
-        api_url = "https://earth-search.aws.element84.com/v1"
-        client = StacClient.open(api_url)
-        items = client.search(
-            collections=["sentinel-2-l2a"],
-            bbox=bbox,
-            datetime=f"{start_date}/{end_date}",
-            max_items=500,
-        ).item_collection()
-        return items
-
-    ## Stack chosen STAC assets into xarray and clip to the bounding box
-
-    def stack_and_clip(
-        items: list,
-        assets: list,
-        bbox: tuple,
-    ) -> xr.DataArray:
-        stack = stackstac.stack(
-            items,
-            assets=assets,
-            bounds_latlon=bbox,
-            epsg=32618,
-            chunksize=4096,
-            rescale=False,
-            fill_value=np.float32(np.nan),  # fix for can_cast issue
-        )
-        return stack
-
-
-    ## Calculate mean NDWI from xarray stack
-    def calculate_mean_ndci(
-        stack: xr.DataArray,
-        filter_clouds: bool,
-    ) -> xr.DataArray:
-        ## Calculate NDcI = (green - nir) / (green + nir)
-        rededge3 = stack.sel(band="rededge3")
-        red = stack.sel(band="red")
-        ndci = (rededge3 - red) / (rededge3 + red)
-
-        if filter_clouds:
-            ## Filter cloudy pixels using SCL bands
-            scl = stack.sel(band="scl")
-            valid_mask = ~scl.isin([3, 8, 9, 10])
-            ndci = ndci.where(valid_mask)
-
-        mean_ndci = ndci.mean(dim=["x", "y"])
-        return mean_ndci
-
-    ## Plot NDWI time series
-    def plot_ndci_time_series(mean_ndci: xr.DataArray) -> None:
-        # Ensure the DataArray has a name for the NDWI values
-        mean_ndci.name = "ndci"
-
-        ## Convert xarray DataArray to pandas DataFrame for better handling
-        df = mean_ndci.to_dataframe().reset_index()
-
-        ## Validate the DataFrame structure
-        if "ndci" not in df.columns or "time" not in df.columns:
-            raise KeyError("Expected columns 'ndci' and 'time' in the DataFrame.")
-
-        ## Generate the plot
-        plt.figure(figsize=(12, 6))
-        plt.plot(df["time"], df["ndci"], marker="o", linestyle="--", color="blue", label="Mean NDCI")
-
-        ## Add grid, labels, title and legend
-        plt.grid(color="gray", linestyle="--", linewidth=0.5, alpha=0.7)
-        plt.xlabel("Time", fontsize=12)
-        plt.ylabel("Mean NDCI", fontsize=12)
-        plt.title("NDCI Time Series", fontsize=14, fontweight="bold")
-
-        plt.legend(loc="upper right", fontsize=10)
-
-        ## Customize ticks
-        plt.xticks(rotation=45, fontsize=10)
-        plt.yticks(fontsize=10)
-
-        ## Display plots
-        plt.tight_layout()
-        plt.show()
-
-    ## Steps to run pipeline
-    items = search_stac_items(bbox, start_date, end_date)
-    print(f"Number of Sentinel-2 scenes processed: {len(items)}")
-    
     if not items:
-        print("No items found for given parameters.")
-        return
+        print("No scenes found.")
+        return None, None, None
 
-    assets = ["rededge3", "red", "scl"]
-    stack = stack_and_clip(items, assets, bbox)
-    mean_ndci = calculate_mean_ndci(stack, filter_clouds)
-    plot_ndci_time_series(mean_ndci)
+    assets = ["green", "red", "nir", "rededge1", "scl"]
+    stack = stackstac.stack(
+        items,
+        assets=assets,
+        bounds_latlon=bbox,  # geographic bbox
+        epsg=epsg,           # output CRS (UTM 17N)
+        chunksize=(1, 1, -1, "auto"),
+        dtype="float32",
+        fill_value=np.float32(np.nan),
+        rescale=False
+    )
+
+    stats_list = []
+
+    for item in items:
+        dt = pd.to_datetime(item.properties["datetime"], utc=True).tz_localize(None)
+
+        try:
+            scene = stack.sel(time=dt)
+        except KeyError:
+            scene = stack.sel(time=dt, method="nearest")
+
+        green = scene.sel(band="green")
+        red = scene.sel(band="red")
+        nir = scene.sel(band="nir")
+        rededge1 = scene.sel(band="rededge1")
+
+        ndwi = normalized_diff(green, nir)
+        ndti = normalized_diff(red, green)
+        ndci = normalized_diff(rededge1, red)
+
+        # Cloud mask
+        if filter_clouds and "scl" in scene.band.values:
+            scl = scene.sel(band="scl")
+            cloud_mask = ~scl.isin([3, 8, 9, 10])
+            ndwi = ndwi.where(cloud_mask)
+            ndti = ndti.where(cloud_mask)
+            ndci = ndci.where(cloud_mask)
+
+        # Only drop non-finite values
+        ndwi = ndwi.where(np.isfinite(ndwi))
+        ndti = ndti.where(np.isfinite(ndti))
+        ndci = ndci.where(np.isfinite(ndci))
+
+        try:
+            # Compute once per index, then stats in memory
+            idx_ds = xr.Dataset(
+                {"ndwi": ndwi, "ndti": ndti, "ndci": ndci}
+            ).compute()
+
+            row = {"date": dt}
+            for name in ["ndwi", "ndti", "ndci"]:
+                arr = idx_ds[name]
+                row[f"{name}_mean"] = float(arr.mean().item())
+                row[f"{name}_median"] = float(arr.median().item())
+
+        except Exception as e:
+            warnings.warn(f"Reduction failed for {item.id} ({dt}): {e}")
+            row = {"date": dt}
+            for name in ["ndwi", "ndti", "ndci"]:
+                row[f"{name}_mean"] = np.nan
+                row[f"{name}_median"] = np.nan
+
+        stats_list.append(row)
+
+    df_results = pd.DataFrame(stats_list)
+    df_results["date"] = pd.to_datetime(df_results["date"], utc=True)
+    df_results.set_index("date", inplace=True)
+    df_results.sort_index(inplace=True)
+
+    df_rolling = df_results.rolling(window=rolling_window, min_periods=1).mean()
+
+    if not df_results.empty:
+        df_results["month"] = df_results.index.month
+        monthly_avg = df_results.groupby("month")[
+            [c for c in df_results.columns if c.startswith(("ndwi", "ndti", "ndci"))]
+        ].mean()
+        monthly_avg.index = [calendar.month_name[m] for m in monthly_avg.index]
+    else:
+        monthly_avg = pd.DataFrame()
+
+    if anomaly_detection and not df_results.empty:
+        for col in ["ndwi_mean", "ndti_mean", "ndci_mean"]:
+            z = (df_results[col] - df_results[col].mean()) / df_results[col].std()
+            df_results[f"{col}_zscore"] = z
+            df_results[f"{col}_anomaly"] = z.abs() > 3
+
+    if export_csv and not df_results.empty:
+        df_results.to_csv(output_path)
+        print(f"WQI statistics exported to {output_path}")
+
+    return df_results, df_rolling, monthly_avg
