@@ -1,116 +1,166 @@
-# env_utils.py
-import xarray as xr
-import matplotlib.pyplot as plt
-import pooch
-import os
+import numpy as np
+import pandas as pd
+import warnings
+import calendar
+from pystac_client import Client as StacClient
+import stackstac
 
-# ---------------------------------------------------------
-# 1. ENVIRONMENTAL DATASETS
-# ---------------------------------------------------------
-def environmental_variables():
-    """Return dictionary describing SST and precipitation datasets."""
-    return {
-        "sst": {
-            "name": "Sea Surface Temperature (GISTEMP/ERSSTv5)",
-            "url": "https://data.giss.nasa.gov/pub/gistemp/gistemp1200_GHCNv4_ERSSTv5.nc.gz",
-            "var": "tempanomaly",  # adjust to correct variable name in GISTEMP
-        },
-        "precipitation": {
-            "name": "Monthly Precipitation (CMAP)",
-            "url": "https://psl.noaa.gov/thredds/dodsC/Datasets/cmap/enh/cmap_enh.nc",
-            "var": "precip",
-        }
-    }
+# --------------------------------
+# Normalized difference helper
+# --------------------------------
+def normalized_diff(b1, b2):
+    """Compute normalized difference (b1-b2)/(b1+b2). Works with Dask/xarray."""
+    return (b1 - b2) / (b1 + b2 + 1e-10)
 
-# ---------------------------------------------------------
-# 2. LOAD TIME SERIES
-# ---------------------------------------------------------
-def load_env_timeseries(bbox, variables=None, cache_dir="data"):
+# --------------------------------
+# compute_wqi_indices (safe)
+# --------------------------------
+def compute_wqi_indices(
+    bbox,
+    start_date,
+    end_date,
+    max_items=5,
+    epsg=32617,
+    filter_clouds=True,
+    export_csv=False,
+    output_path="wqi_results.csv",
+    anomaly_detection=False,
+    rolling_window=3
+):
     """
-    Load monthly mean environmental variable time series over a bounding box.
-
-    Parameters:
-        bbox: [min_lon, min_lat, max_lon, max_lat]
-        variables: list of strings ("sst", "precipitation") or None for both
-        cache_dir: folder to store downloaded SST file
-
+    Compute WQI indices (NDWI, NDTI, NDCI) for a bounding box and date range.
     Returns:
-        dict of xarray DataArrays with spatial mean time series
+        - df_results: raw indices per scene
+        - df_rolling: rolling mean for smoothing
+        - monthly_avg: seasonal cycle aggregated by month
     """
-    min_lon, min_lat, max_lon, max_lat = bbox
-    env = environmental_variables()
+    # ----------------------------
+    # STAC search
+    # ----------------------------
+    client = StacClient.open("https://earth-search.aws.element84.com/v1")
+    items = client.search(
+        collections=["sentinel-2-l2a"],
+        bbox=bbox,
+        datetime=f"{start_date}/{end_date}",
+        max_items=max_items
+    ).item_collection()
 
-    if variables is None:
-        variables = list(env.keys())
+    if not items:
+        print("No scenes found.")
+        return None, None, None
 
-    timeseries = {}
+    # ----------------------------
+    # Lazy stack
+    # ----------------------------
+    assets = ["green", "red", "nir", "rededge1", "scl"]
+    stack = stackstac.stack(
+        items,
+        assets=assets,
+        bounds_latlon=bbox,
+        epsg=epsg,
+        chunksize=(1, 1, -1, "auto"),
+        dtype="float32",
+        fill_value=np.float32(np.nan),
+        rescale=False
+    )
 
-    for var in variables:
-        if var == "sst":
-            # Download and decompress SST using pooch
-            os.makedirs(cache_dir, exist_ok=True)
-            local_file = pooch.retrieve(
-                env[var]["url"],
-                processor=pooch.Decompress(),
-                known_hash=None,
-                path=cache_dir
-            )
-            ds = xr.open_dataset(local_file)
-        else:
-            # Precipitation loads from remote URL
-            ds = xr.open_dataset(env[var]["url"])
+    stats_list = []
 
-        da = ds[env[var]["var"]].sel(
-            lon=slice(min_lon, max_lon),
-            lat=slice(min_lat, max_lat)
-        )
+    for item in items:
+        # Parse scene datetime and remove timezone
+        dt = pd.to_datetime(item.properties["datetime"], utc=True).tz_localize(None)
 
-        # Spatial mean over bounding box
-        timeseries[var] = da.mean(dim=["lat", "lon"])
+        # Select scene (lazy)
+        try:
+            scene = stack.sel(time=dt)
+        except KeyError:
+            scene = stack.sel(time=dt, method="nearest")
 
-    return timeseries
+        # Extract bands
+        green = scene.sel(band="green")
+        red = scene.sel(band="red")
+        nir = scene.sel(band="nir")
+        rededge1 = scene.sel(band="rededge1")
 
-# ---------------------------------------------------------
-# 3. LOAD SEASONAL CYCLE
-# ---------------------------------------------------------
-def load_env_seasonal(bbox, variables=None):
-    """
-    Compute seasonal cycle (Winter/Spring/Summer/Fall) for SST & precipitation.
-    """
-    ts_dict = load_env_timeseries(bbox, variables)
-    seasonal = {}
-    for var, da in ts_dict.items():
-        da = da.resample(time="M").mean()
-        seasonal[var] = da.groupby("time.season").mean()
-    return seasonal
+        # Compute indices
+        ndwi = normalized_diff(green, nir)
+        ndti = normalized_diff(red, green)
+        ndci = normalized_diff(rededge1, red)
 
-# ---------------------------------------------------------
-# 4. PLOTTING FUNCTIONS
-# ---------------------------------------------------------
-def plot_env_timeseries(timeseries_dict):
-    """Plot monthly time series for SST and precipitation."""
-    plt.figure(figsize=(12, 5))
-    for var, da in timeseries_dict.items():
-        plt.plot(da['time'], da, label=var.upper())
-    plt.title("Environmental Variable Time Series")
-    plt.xlabel("Time")
-    plt.ylabel("Value")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+        # Apply cloud mask if requested and SCL exists
+        if filter_clouds and "scl" in scene.band.values:
+            scl = scene.sel(band="scl")
+            cloud_mask = ~scl.isin([3, 8, 9, 10])  # shadow + clouds
+            ndwi = ndwi.where(cloud_mask)
+            ndti = ndti.where(cloud_mask)
+            ndci = ndci.where(cloud_mask)
 
-def plot_env_seasonal(seasonal_dict):
-    """Plot seasonal mean cycle (DJF, MAM, JJA, SON)."""
-    plt.figure(figsize=(10, 5))
-    for var, da in seasonal_dict.items():
-        seasons = list(da['season'].values)
-        values = da.values
-        plt.plot(seasons, values, marker="o", label=var.upper())
-    plt.title("Seasonal Climatology (DJF, MAM, JJA, SON)")
-    plt.xlabel("Season")
-    plt.ylabel("Mean Value")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+        # Mask invalid values only (allow negative values)
+        ndwi = ndwi.where(np.isfinite(ndwi))
+        ndti = ndti.where(np.isfinite(ndti))
+        ndci = ndci.where(np.isfinite(ndci))
+
+        # Compute scalar reductions safely
+        try:
+            row = {
+                "date": dt,
+                "ndwi_mean": float(ndwi.mean().compute()),
+                "ndwi_median": float(ndwi.median().compute()),
+                "ndwi_max": float(ndwi.max().compute()),
+                "ndwi_min": float(ndwi.min().compute()),
+                "ndwi_std": float(ndwi.std().compute()),
+
+                "ndti_mean": float(ndti.mean().compute()),
+                "ndti_median": float(ndti.median().compute()),
+                "ndti_max": float(ndti.max().compute()),
+                "ndti_min": float(ndti.min().compute()),
+                "ndti_std": float(ndti.std().compute()),
+
+                "ndci_mean": float(ndci.mean().compute()),
+                "ndci_median": float(ndci.median().compute()),
+                "ndci_max": float(ndci.max().compute()),
+                "ndci_min": float(ndci.min().compute()),
+                "ndci_std": float(ndci.std().compute())
+            }
+        except Exception as e:
+            warnings.warn(f"Reduction failed for {item.id} ({dt}): {e}")
+            row = {"date": dt}
+            for col in ["ndwi", "ndti", "ndci"]:
+                for stat in ["mean", "median", "max", "min", "std"]:
+                    row[f"{col}_{stat}"] = np.nan
+
+        stats_list.append(row)
+
+    # ----------------------------
+    # Build DataFrame
+    # ----------------------------
+    df_results = pd.DataFrame(stats_list)
+    df_results['date'] = pd.to_datetime(df_results['date'], utc=True)
+    df_results.set_index('date', inplace=True)
+    df_results.sort_index(inplace=True)
+
+    # Rolling mean
+    df_rolling = df_results.rolling(window=rolling_window, min_periods=1).mean()
+
+    # Monthly seasonal cycle
+    if not df_results.empty:
+        df_results['month'] = df_results.index.month
+        monthly_avg = df_results.groupby('month')[[c for c in df_results.columns if c.startswith(("ndwi","ndti","ndci"))]].mean()
+        monthly_avg.index = [calendar.month_name[m] for m in monthly_avg.index]
+    else:
+        monthly_avg = pd.DataFrame()
+
+    # Optional anomaly detection
+    if anomaly_detection and not df_results.empty:
+        for col in ["ndwi_mean", "ndti_mean", "ndci_mean"]:
+            z = (df_results[col] - df_results[col].mean()) / df_results[col].std()
+            df_results[f"{col}_zscore"] = z
+            df_results[f"{col}_anomaly"] = z.abs() > 3
+
+    # Optional CSV export
+    if export_csv and not df_results.empty:
+        df_results.to_csv(output_path)
+        print(f"WQI statistics exported to {output_path}")
+
+    return df_results, df_rolling, monthly_avg
+
