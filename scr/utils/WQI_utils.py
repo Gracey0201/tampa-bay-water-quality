@@ -6,16 +6,16 @@ import stackstac
 import calendar
 import xarray as xr
 
-HB_BAY = (-82.47, 27.75, -82.30, 28.00)
+TAMPA_BAY = (-82.7167, 27.5833, -82.3833, 28.0333)
 
 def normalized_diff(b1, b2):
     """Compute normalized difference (b1-b2)/(b1+b2)."""
     return (b1 - b2) / (b1 + b2 + 1e-10)
 
 def compute_wqi_indices(
-    bbox=HB_BAY,
-    start_date="2019-01-01",
-    end_date="2024-12-31",
+    bbox=TAMPA_BAY,
+    start_date="2018-01-01",
+    end_date="2022-12-31",
     max_items=500,
     epsg=32617,
     filter_clouds=True,
@@ -164,7 +164,7 @@ def compute_wqi_indices(
 
     ds_ts = ds_ts.compute()
 
-# FIXED: Original working time conversion + CLEANUP
+# Time conversion
     df_results = ds_ts.to_dataframe().reset_index()
     df_results["time"] = pd.to_datetime(df_results["time"], utc=True).dt.tz_localize(None)
     df_results = df_results.rename(columns={"time": "date"})
@@ -213,4 +213,4 @@ def compute_wqi_indices(
         if df_results['ndwi_mean'].max() > 0.1:
             print("WARNING: Positive NDWI detected - check diagnostics!")
 
-    return df_results, df_rolling, monthly_avg, stack
+    return df_results, df_rolling, monthly_avg
