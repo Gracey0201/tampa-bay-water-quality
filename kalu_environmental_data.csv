@@ -1,4 +1,0 @@
-time,noaa_mrms_qpe:pass,noaa_mrms_qpe:period,noaa_mrms_qpe:region,description,proj:transform,title,proj:shape,epsg,sst_monthly_mean,precip_monthly_sum
-2020-10-31,2,24,CONUS,Multi-sensor accumulation 24-hour (2-hour latency) [mm],"{0.009999999714244895, 0.0, -0.009999999714204058, 54.9999999998571, -129.99999999985712}",Processed Cloud Optimized GeoTIFF file,"{7000, 3500}",4326,27.080038,161.7625118669065
-2020-11-30,2,24,CONUS,Multi-sensor accumulation 24-hour (2-hour latency) [mm],"{0.009999999714244895, 0.0, -0.009999999714204058, 54.9999999998571, -129.99999999985712}",Processed Cloud Optimized GeoTIFF file,"{7000, 3500}",4326,23.229822,192.30182500953623
-2020-12-31,2,24,CONUS,Multi-sensor accumulation 24-hour (2-hour latency) [mm],"{0.009999999714244895, 0.0, -0.009999999714204058, 54.9999999998571, -129.99999999985712}",Processed Cloud Optimized GeoTIFF file,"{7000, 3500}",4326,17.809647,55.68063471598843
