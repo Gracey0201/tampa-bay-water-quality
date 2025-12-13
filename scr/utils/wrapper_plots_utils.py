@@ -4,13 +4,12 @@ from matplotlib.dates import DateFormatter
 import calendar
 import numpy as np
 
-# -------------------------------
+
 # 1. Time Series Plot
-# -------------------------------
 def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "ndci"], 
                          title="WQI Time Series", show_anomalies=True, anomaly_suffix="_mean_anomaly"):
     """
-    Enhanced time series plot with separate panels for mean/median/rolling + anomalies.
+    Enhanced time series plot for mean/median/rolling + anomalies.
     """
     n_indices = len(indices)
     fig, axes = plt.subplots(n_indices, 3, figsize=(18, 4*n_indices), sharex=True)
@@ -20,7 +19,7 @@ def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "
     colors = ['blue', 'orange', 'green']
     
     for i, (idx, color) in enumerate(zip(indices, colors)):
-        # MEAN panel
+        # Mean panel
         ax_mean = axes[i, 0]
         ax_mean.plot(df_results.index, df_results[f'{idx}_mean'], 
                      color=color, linewidth=2, alpha=0.8, label='Mean')
@@ -38,7 +37,7 @@ def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "
         ax_mean.grid(alpha=0.3)
         ax_mean.legend()
         
-        # MEDIAN panel  
+        # Median panel  
         ax_med = axes[i, 1]
         ax_med.plot(df_results.index, df_results[f'{idx}_median'], 
                     color=color, linewidth=2, alpha=0.8, linestyle='--', label='Median')
@@ -46,7 +45,7 @@ def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "
         ax_med.grid(alpha=0.3)
         ax_med.legend()
         
-        # ROLLING panel
+        # Rolling panel
         ax_roll = axes[i, 2]
         if df_rolling is not None and f'{idx}_mean' in df_rolling.columns:
             ax_roll.plot(df_rolling.index, df_rolling[f'{idx}_mean'], 
@@ -68,9 +67,9 @@ def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "
     plt.show()
 
 
-# -------------------------------
+
 # 2. Seasonal Plot
-# -------------------------------
+
 def plot_wqi_seasonal(monthly_avg, indices=["ndwi", "ndti", "ndci"], title="WQI Seasonal Cycle"):
     """
     Enhanced seasonal plot with separate mean/median panels + full 12-month axis.
@@ -114,19 +113,19 @@ def plot_wqi_seasonal(monthly_avg, indices=["ndwi", "ndti", "ndci"], title="WQI 
     plt.show()
 
 
-# -------------------------------
-# 3. Multi-Season Plot
-# -------------------------------
+
+# generating multi-Season Plot
+
 def plot_wqi_seasons(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI by Season"):
     """
-    Plot WQI indices grouped by meteorological seasons (DJF, MAM, JJA, SON).
+    Plot WQI indices grouped by meteorological seasons (Winter, Spring, Summer, Fall).
     """
-    # Assign seasons
+    # Assign seasons with full names
     seasons = {
-        12: 'DJF', 1: 'DJF', 2: 'DJF',
-        3: 'MAM', 4: 'MAM', 5: 'MAM',
-        6: 'JJA', 7: 'JJA', 8: 'JJA',
-        9: 'SON', 10: 'SON', 11: 'SON'
+        12: 'Winter', 1: 'Winter', 2: 'Winter',
+        3: 'Spring', 4: 'Spring', 5: 'Spring',
+        6: 'Summer', 7: 'Summer', 8: 'Summer',
+        9: 'Fall', 10: 'Fall', 11: 'Fall'
     }
     df_results['season'] = df_results.index.month.map(seasons)
     
@@ -136,8 +135,9 @@ def plot_wqi_seasons(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI by
     
     for idx, color in zip(indices, colors):
         means = df_results.groupby('season')[f'{idx}_mean'].mean()
-        ax.plot(['DJF','MAM','JJA','SON'], means[['DJF','MAM','JJA','SON']], 
-                'o-', color=color, linewidth=3, markersize=8, label=f'{idx.upper()} mean')
+        # Order explicitly so it always goes Winter->Spring->Summer->Fall
+        ordered = ['Winter', 'Spring', 'Summer', 'Fall']
+        ax.plot(ordered, means[ordered], 'o-', color=color, linewidth=3, markersize=8, label=f'{idx.upper()} mean')
     
     ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_ylabel("Index Value")
@@ -145,6 +145,7 @@ def plot_wqi_seasons(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI by
     ax.legend()
     plt.tight_layout()
     plt.show()
+
 
 
 # -------------------------------
