@@ -1,76 +1,61 @@
-import xarray as xr
 import matplotlib.pyplot as plt
-#import seaborn as sns
 import numpy as np
-import geopandas as gpd
-from rasterio import features
+from matplotlib import cm
 
-def clip_to_boundary(stack: xr.DataArray, boundary: gpd.GeoDataFrame) -> xr.DataArray:
-    """
-    Clip xarray DataArray to the provided boundary GeoDataFrame.
+def normalized_diff(b1, b2):
+    """Compute normalized difference (b1-b2)/(b1+b2)."""
+    return (b1 - b2) / (b1 + b2 + 1e-10)
 
-    Parameters
-    ----------
-    stack : xr.DataArray
-        Raster data with 'x' and 'y' coordinates.
-    boundary : gpd.GeoDataFrame
-        Polygon boundary to clip the raster.
-
-    Returns
-    -------
-    xr.DataArray
-        Clipped raster data.
-    """
-    geom = [boundary.unary_union.__geo_interface__]
-    mask = features.geometry_mask(
-        geom,
-        out_shape=(stack.sizes['y'], stack.sizes['x']),
-        transform=stack.rio.transform(),
-        invert=True
-    )
-    return stack.where(mask)
-
-
-def plot_heatmap(stack: xr.DataArray, title: str):
-    """
-    Plot heatmap of mean values across space.
-    """
-    arr = stack.mean(dim='time')
-    plt.figure(figsize=(10,6))
-    sns.heatmap(arr.values, cmap='coolwarm')
-    plt.title(title)
+def plot_wqi_index_maps(stack, indices=["ndwi", "ndti", "ndci"], title="WQI Index Maps"):
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    green = stack.sel(band='green')
+    red = stack.sel(band='red') 
+    nir = stack.sel(band='nir')
+    rededge1 = stack.sel(band='rededge1')
+    
+    ndwi = normalized_diff(green, nir)
+    ndti = normalized_diff(red, green)
+    ndci = normalized_diff(rededge1, red)
+    
+    maps = [ndwi.mean('time'), ndti.mean('time'), ndci.mean('time')]
+    map_names = ['NDWI', 'NDTI', 'NDCI']
+    
+    for i, (map_data, name) in enumerate(zip(maps, map_names)):
+        ax = axes[i//2, i%2]
+        map_data.plot(ax=ax, cmap='RdYlBu_r', vmin=-0.5, vmax=0.3)
+        ax.set_title(f'{name} - Annual Mean')
+    
+    ndwi_std = ndwi.std('time')
+    ndwi_std.plot(ax=axes[1,1], cmap='Reds', vmin=0, vmax=0.2)
+    axes[1,1].set_title('NDWI - Std Dev')
+    
+    plt.suptitle(title, fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(f'{title.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
     plt.show()
 
-
-def create_composite_risk_map(stack_dict: dict, thresholds: dict) -> xr.DataArray:
-    """
-    Create a composite risk map combining multiple WQI indices.
-
-    Parameters
-    ----------
-    stack_dict : dict
-        Dictionary of xarray.DataArrays, e.g., {'NDWI': stack1, 'NDCI': stack2, 'NDTI': stack3}
-    thresholds : dict
-        Dictionary with keys 'low', 'medium', 'high'
-
-    Returns
-    -------
-    xr.DataArray
-        Composite risk map
-    """
-    combined = sum([stack_dict[k].mean(dim='time') for k in stack_dict.keys()]) / len(stack_dict)
-    risk = xr.full_like(combined, fill_value=0)
-    risk = xr.where(combined < thresholds['low'], 1, risk)
-    risk = xr.where((combined >= thresholds['low']) & (combined < thresholds['medium']), 2, risk)
-    risk = xr.where(combined >= thresholds['medium'], 3, risk)
+def plot_wqi_std_maps(stack, indices=["ndwi", "ndti", "ndci"], title="WQI Standard Deviation Maps"):
+    green = stack.sel(band='green')
+    red = stack.sel(band='red') 
+    nir = stack.sel(band='nir')
+    rededge1 = stack.sel(band='rededge1')
     
-    plt.figure(figsize=(10,6))
-    risk.plot(cmap='RdYlGn_r')
-    plt.title("Composite Water Quality Risk Map (1=Low,3=High)")
+    ndwi = normalized_diff(green, nir)
+    ndti = normalized_diff(red, green)
+    ndci = normalized_diff(rededge1, red)
+    
+    fig, axes = plt.subplots(1, len(indices), figsize=(5*len(indices), 5))
+    if len(indices) == 1:
+        axes = [axes]
+    
+    std_maps = [ndwi.std('time'), ndti.std('time'), ndci.std('time')]
+    
+    for i, (std_map, idx) in enumerate(zip(std_maps, indices)):
+        std_map.plot(ax=axes[i], cmap='Reds', vmin=0, vmax=0.25)
+        axes[i].set_title(f'{idx.upper()} Std Dev')
+    
+    plt.suptitle(title, fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(f'{title.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
     plt.show()
-    
-    return risk
-s[0].coords,
-        dims=agg_stacks[0].dims,
-        name="composite_risk"
-    )
