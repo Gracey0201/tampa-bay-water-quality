@@ -8,7 +8,6 @@ dependencies:
   - leafmap=0.38.5
   - matplotlib
   - dask=2024.9.1
-  - dask-labextension
   - distributed=2024.9.1
   - stackstac=0.5.0
   - numpy
@@ -17,3 +16,15 @@ dependencies:
   - rasterio
   - geopandas
   - shapely
+  - seaborn
+  - scikit-learn
+  - zarr
+  - fsspec
+  - s3fs
+  - pyproj
+  - fiona
+  - pystac
+  - pip:
+      - planetary-computer
+      - pystac-client
+      - stackstac
