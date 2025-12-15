@@ -7,6 +7,7 @@ dependencies:
   - pystac-client=0.7.5
   - leafmap=0.38.5
   - matplotlib
+  - seaborn
   - dask=2024.9.1
   - dask-labextension
   - distributed=2024.9.1
@@ -17,7 +18,7 @@ dependencies:
   - rasterio
   - geopandas
   - shapely
-  - rioxarray
-  - netcdf4
-  - h5netcdf
-  - pooch
+  - scipy
+  - scikit-learn
+  - folium
+  - contetily
