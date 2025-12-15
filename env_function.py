@@ -15,7 +15,7 @@ def environmental_variables(
     variables: List[str] = ["sst", "precip"],
     # Original SST URL is kept as default, but logic will fall back to MUR if needed.
     sst_zarr_url: str = "s3://surftemp-sst/data/sst.zarr",  
-    precip_collection: str = "noaa-mrms-qpe-24h-pass2",
+    precip_collection: str = "noaa-mrms-qpe-24h-pass2", # <<<--- CORRECTED BACK TO MRMS
     stac_api_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1"
 ) -> Dict[str, Union[xr.DataArray, List[Item], None]]:
     """
@@ -24,8 +24,9 @@ def environmental_variables(
     Includes fixes for:
     1. Truncated SST data (by falling back to MUR).
     2. Cloud credential errors (by using storage_options={"anon": True}).
-    3. MUR variable name error (by using 'analysed_sst' for both sources).
-    4. FIX: Universal Kelvin to Celsius conversion (Fixes the SST = 300 K issue).
+    3. MUR variable name error (by using 'analysed_sst').
+    4. Universal Kelvin to Celsius conversion.
+    5. Uses the MRMS STAC collection for precipitation (as it returns items).
     """
 
     results = {}
@@ -73,7 +74,7 @@ def environmental_variables(
                     .chunk({"time": "auto", "lat": -1, "lon": -1})
                 )
 
-                # 4. Apply Kelvin conversion (FIX 4: Now applied universally)
+                # 4. Apply Kelvin conversion 
                 print("Applying Kelvin to Celsius conversion.")
                 sst = sst - 273.15
                 sst.attrs["units"] = "C"
@@ -94,7 +95,7 @@ def environmental_variables(
             results["sst"] = None
 
     # ======================
-    # Precipitation (STAC) - Robust Item Retrieval 
+    # Precipitation (STAC) - Robust Item Retrieval (MRMS)
     # ======================
     if "precip" in variables:
         all_items: List[Item] = []
@@ -124,7 +125,10 @@ def environmental_variables(
             )
 
             # search.get_all_items() handles the pagination logic
-            all_items.extend(list(search.get_all_items()))
+            items_found = list(search.get_all_items())
+            all_items.extend(items_found)
+            print(f"Year {year}: {len(items_found)} precip items from {precip_collection}")
+
 
         results["precip"] = all_items if all_items else None
 
