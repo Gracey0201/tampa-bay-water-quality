@@ -9,7 +9,6 @@ dependencies:
   - matplotlib
   - seaborn
   - dask=2024.9.1
-  - dask-labextension
   - distributed=2024.9.1
   - stackstac=0.5.0
   - numpy
@@ -22,3 +21,12 @@ dependencies:
   - scikit-learn
   - folium
   - contetily
+  - fsspec
+  - s3fs
+  - planetary_computer
+  - zarr
+  - pyproj
+  - fiona
+  - pystac
+
+
