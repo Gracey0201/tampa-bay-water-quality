@@ -1,3 +1,5 @@
+# grace_function
+
 import numpy as np
 import pandas as pd
 import warnings
@@ -8,9 +10,11 @@ import xarray as xr
 
 TAMPA_BAY = (-82.7167, 27.5833, -82.3833, 28.0333)
 
+
 def normalized_diff(b1, b2):
     """Compute normalized difference (b1-b2)/(b1+b2)."""
     return (b1 - b2) / (b1 + b2 + 1e-10)
+
 
 def compute_wqi_indices(
     bbox=TAMPA_BAY,
@@ -19,15 +23,24 @@ def compute_wqi_indices(
     max_items=500,
     epsg=32617,
     filter_clouds=True,
-    max_cloud_cover=20.0,  
+    max_cloud_cover=20.0,
     export_csv=False,
     output_path="wqi_results.csv",
     anomaly_detection=False,
     rolling_window=3,
-    diagnostics=True
+    diagnostics=True,
 ):
     """
     Compute NDWI, NDTI, NDCI with full diagnostics for professor review.
+
+    Returns
+    -------
+    df_results : pandas.DataFrame
+        Time-indexed NDWI, NDTI, NDCI statistics (mean/median and anomalies if enabled).
+    df_rolling : pandas.DataFrame
+        Rolling-window smoothed versions of the WQI time series.
+    monthly_avg : pandas.DataFrame
+        Monthly climatology of WQI indices.
     """
 
     client = StacClient.open("https://earth-search.aws.element84.com/v1")
@@ -35,28 +48,35 @@ def compute_wqi_indices(
         collections=["sentinel-2-l2a"],
         bbox=bbox,
         datetime=f"{start_date}/{end_date}",
-        max_items=max_items
+        max_items=max_items,
     )
     items = search.item_collection()
 
     if not items:
         print("No scenes found.")
-        return None, None, None, None
+        return None, None, None
 
     # CLOUD FILTER (before stacking!)
     if filter_clouds:
         original_count = len(items)
-        items = [item for item in items if item.properties.get('eo:cloud_cover', 100) < max_cloud_cover]
-        print(f"Cloud filtered: {original_count} → {len(items)} scenes (<{max_cloud_cover}% cloud cover)")
+        items = [
+            item
+            for item in items
+            if item.properties.get("eo:cloud_cover", 100) < max_cloud_cover
+        ]
+        print(
+            f"Cloud filtered: {original_count} → {len(items)} scenes "
+            f"(<{max_cloud_cover}% cloud cover)"
+        )
 
     if not items:
         print("No low-cloud scenes found.")
-        return None, None, None, None
+        return None, None, None
 
     # FULL DIAGNOSTICS FOR FIRST 5 SCENES
     if diagnostics:
         print("\n=== FULL DATA QUALITY DIAGNOSTICS (First 5 Scenes) ===")
-        print("="*80)
+        print("=" * 80)
 
     assets = ["green", "red", "nir", "rededge1", "scl"]
     stack = stackstac.stack(
@@ -67,7 +87,7 @@ def compute_wqi_indices(
         chunksize=(1, 1, -1, "auto"),
         dtype="float32",
         fill_value=np.float32(np.nan),
-        rescale=False
+        rescale=False,
     )
 
     # DIAGNOSTIC LOOP
@@ -75,52 +95,62 @@ def compute_wqi_indices(
         if diagnostics:
             dt = pd.to_datetime(item.properties["datetime"], utc=True).tz_localize(None)
             print(f"\nSCENE {i+1}: {dt.date()} | ID: {item.id[:8]}...")
-            
+
             # THUMBNAIL
-            thumb_url = 'No thumbnail'
-            if 'thumbnail' in item.assets:
-                thumb_asset = item.assets['thumbnail']
-                if hasattr(thumb_asset, 'href'):
+            thumb_url = "No thumbnail"
+            if "thumbnail" in item.assets:
+                thumb_asset = item.assets["thumbnail"]
+                if hasattr(thumb_asset, "href"):
                     thumb_url = thumb_asset.href
             print(f"Thumbnail: {thumb_url}")
-            
+
             # CLOUD METADATA
-            cloud_pct = item.properties.get('eo:cloud_cover', 'N/A')
+            cloud_pct = item.properties.get("eo:cloud_cover", "N/A")
             print(f"Cloud cover (metadata): {cloud_pct}%")
-            
+
             # SCL ANALYSIS
             try:
                 scene = stack.sel(time=dt, method="nearest")
                 if "scl" in scene.band.values:
                     scl = scene.sel(band="scl").compute()
-                    cloud_pixels = ((scl == 3) | (scl == 8) | (scl == 9) | (scl == 10)).sum().item()
+                    cloud_pixels = (
+                        (scl == 3)
+                        | (scl == 8)
+                        | (scl == 9)
+                        | (scl == 10)
+                    ).sum().item()
                     water_pixels = (scl == 6).sum().item()
                     total_valid = np.isfinite(scl).sum().item()
-                    
+
                     cloud_ratio = cloud_pixels / total_valid if total_valid > 0 else 0
                     water_ratio = water_pixels / total_valid if total_valid > 0 else 0
-                    
-                    print(f"SCL breakdown: Clouds={cloud_ratio:.1%} | Water={water_ratio:.1%} | Valid={total_valid:,}px")
+
+                    print(
+                        f"SCL breakdown: Clouds={cloud_ratio:.1%} | "
+                        f"Water={water_ratio:.1%} | Valid={total_valid:,}px"
+                    )
                 else:
                     print("No SCL band available")
             except Exception as e:
                 print(f"SCL analysis failed: {e}")
-            
+
             # NDWI SANITY CHECK
             try:
-                green = scene.sel(band="green").mean().compute()
-                nir = scene.sel(band="nir").mean().compute()
-                raw_ndwi = (green - nir) / (green + nir + 1e-10)
-                print(f"Raw NDWI: {raw_ndwi:.3f} | Green: {green:.3f} | NIR: {nir:.3f}")
-                
+                green_mean = scene.sel(band="green").mean().compute()
+                nir_mean = scene.sel(band="nir").mean().compute()
+                raw_ndwi = (green_mean - nir_mean) / (green_mean + nir_mean + 1e-10)
+                print(
+                    f"Raw NDWI: {raw_ndwi:.3f} | "
+                    f"Green: {green_mean:.3f} | NIR: {nir_mean:.3f}"
+                )
+
                 if raw_ndwi > 0.1:
                     print("ALERT: Positive NDWI → Likely land/cloud contamination!")
                 elif raw_ndwi < -0.5:
                     print("CLEAN water signal")
-                    
             except Exception as e:
                 print(f"NDWI check failed: {e}")
-            
+
             print("-" * 80)
 
     print("\nDiagnostics complete. Computing indices...\n")
@@ -156,41 +186,48 @@ def compute_wqi_indices(
     ndci_mean_t = ndci.mean(dim=("x", "y"))
     ndci_med_t = ndci.median(dim=("x", "y"))
 
-    ds_ts = xr.Dataset({
-        "ndwi_mean": ndwi_mean_t, "ndwi_median": ndwi_med_t,
-        "ndti_mean": ndti_mean_t, "ndti_median": ndti_med_t,
-        "ndci_mean": ndci_mean_t, "ndci_median": ndci_med_t,
-    })
+    ds_ts = xr.Dataset(
+        {
+            "ndwi_mean": ndwi_mean_t,
+            "ndwi_median": ndwi_med_t,
+            "ndti_mean": ndti_mean_t,
+            "ndti_median": ndti_med_t,
+            "ndci_mean": ndci_mean_t,
+            "ndci_median": ndci_med_t,
+        }
+    ).compute()
 
-    ds_ts = ds_ts.compute()
-
-# Time conversion
+    # Time conversion
     df_results = ds_ts.to_dataframe().reset_index()
-    df_results["time"] = pd.to_datetime(df_results["time"], utc=True).dt.tz_localize(None)
+    df_results["time"] = (
+        pd.to_datetime(df_results["time"], utc=True).dt.tz_localize(None)
+    )
     df_results = df_results.rename(columns={"time": "date"})
     df_results.set_index("date", inplace=True)
     df_results.sort_index(inplace=True)
 
-# DROP NON-NUMERIC COLUMNS (including scene IDs!)
-    wqi_cols = [col for col in df_results.columns if col.startswith(('ndwi', 'ndti', 'ndci'))]
-    df_results = df_results[wqi_cols]  # KEEP ONLY WQI columns
-    df_results = df_results.astype(float)  # Now safe
+    # DROP NON-NUMERIC COLUMNS (including scene IDs!)
+    wqi_cols = [
+        col
+        for col in df_results.columns
+        if col.startswith(("ndwi", "ndti", "ndci"))
+    ]
+    df_results = df_results[wqi_cols]
+    df_results = df_results.astype(float)
 
     print("Shape:", df_results.shape)
     print("Columns:", df_results.columns.tolist())
 
-    # FORCE NUMERIC DTYPE FOR WQI COLUMNS
-    wqi_cols = [col for col in df_results.columns if col.startswith(('ndwi_', 'ndti_', 'ndci_'))]
-    df_results[wqi_cols] = df_results[wqi_cols].astype(float)
-
-    print("Shape:", df_results.shape)
-
     # Rolling + monthly
     df_rolling = df_results.rolling(window=rolling_window, min_periods=1).mean()
-    
+
     if not df_results.empty:
         df_results["month"] = df_results.index.month
-        monthly_cols = [col for col in df_results.columns if col.startswith(('ndwi', 'ndti', 'ndci'))]
+        monthly_cols = [
+            col
+            for col in df_results.columns
+            if col.startswith(("ndwi", "ndti", "ndci"))
+        ]
         monthly_avg = df_results.groupby("month")[monthly_cols].mean()
         monthly_avg.index = [calendar.month_name[m] for m in monthly_avg.index]
     else:
@@ -207,10 +244,24 @@ def compute_wqi_indices(
         df_results.to_csv(output_path)
         print(f"WQI statistics exported to {output_path}")
 
-    print(f"Analysis complete: {len(df_results)} scenes processed")
-    if not df_results.empty:
-        print(f"NDWI range: {df_results['ndwi_mean'].min():.3f} to {df_results['ndwi_mean'].max():.3f}")
-        if df_results['ndwi_mean'].max() > 0.1:
+    print(f"Analysis complete: {len(df_results)} time steps processed")
+    if not df_results.empty and "ndwi_mean" in df_results.columns:
+        print(
+            f"NDWI range: {df_results['ndwi_mean'].min():.3f} "
+            f"to {df_results['ndwi_mean'].max():.3f}"
+        )
+        if df_results["ndwi_mean"].max() > 0.1:
             print("WARNING: Positive NDWI detected - check diagnostics!")
 
     return df_results, df_rolling, monthly_avg
+
+
+# ----------------------------------------------------------------------
+# Backwards-compatible alias for original analysis.py import
+# ----------------------------------------------------------------------
+def compute_indices(*args, **kwargs):
+    """
+    Backwards-compatible wrapper that calls compute_wqi_indices.
+    Keeps original analysis.py import working.
+    """
+    return compute_wqi_indices(*args, **kwargs)
