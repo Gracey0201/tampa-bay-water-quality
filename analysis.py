@@ -1,160 +1,149 @@
-from typing import Dict, List, Tuple, Union
+# kalu_analysis.py
 
 import xarray as xr
 import pandas as pd
+import numpy as np
+from typing import Dict
 
-from pystac_client import Client as STACClient
-import planetary_computer as pc
-from pystac.item import Item
-# NOTE: stackstac is needed to process the GOES STAC items
-import stackstac
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+
+from env_function import environmental_variables  # your function
+from grace_functions import compute_indices       # Grace's indices
 
 
-# MUR SST Zarr (complete, gap-free, lower resolution)
-MUR_SST_URL = "s3://mur-sst/zarr-v1"
-
-def environmental_variables(
-    bbox: Tuple[float, float, float, float],
+def load_env_timeseries(
+    bbox,
     start_date: str,
     end_date: str,
-    variables: List[str] = ["sst", "precip"],
-    sst_source: str = "goes-sst", # New parameter to select SST source
-    precip_collection: str = "noaa-mrms-qpe-24h-pass2",
-    stac_api_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1",
-) -> Dict[str, Union[xr.DataArray, List[Item], None]]:
+) -> xr.DataArray:
     """
-    Modular environmental data fetcher, now supporting GOES SST via STAC.
-
-    - Uses MUR Zarr for long-term SST (if requested) OR STAC for near-real-time SST.
-    - Robust STAC-based precipitation item retrieval.
+    Wrapper to get monthly SST over the bbox and period.
+    Returns an xr.DataArray with dimension 'time'.
     """
+    env_data = environmental_variables(
+        bbox=bbox,
+        start_date=start_date,
+        end_date=end_date,
+        variables=["sst"],  # precip may be None due to API limits
+    )
 
-    results = {}
-    client = STACClient.open(stac_api_url, modifier=pc.sign_inplace)
+    sst_da = env_data.get("sst", None)
+    if sst_da is None:
+        raise ValueError("SST data could not be retrieved.")
 
-    # ======================
-    # SST (GOES STAC)
-    # ======================
-    if "sst" in variables and sst_source == "goes-sst":
-        try:
-            print(f"Searching for SST data in STAC collection: {sst_source}")
-            
-            # Use the search method, similar to precipitation
-            search = client.search(
-                collections=[sst_source],
-                datetime=f"{start_date}/{end_date}",
-                bbox=bbox,
-                query={"platform": {"eq": "GOES-16"}}, # Focus on GOES-East
-            )
+    return sst_da
 
-            sst_items = list(search.get_all_items())
-            print(f"GOES SST Items found: {len(sst_items)}")
-            
-            if sst_items:
-                # 1. Stack the STAC Items into one xarray.DataArray
-                # Asset for SST is typically 'sst' or 'sea_surface_temp' (it's 'sst' for GOES)
-                sst_stack = stackstac.stack(
-                    sst_items,
-                    assets=["sst"], 
-                    chunksize={"time": 1, "x": 2048, "y": 2048},
-                    fill_value=None, 
-                    dtype="float32",
-                ).sel(band="sst").squeeze()
 
-                # 2. Convert to Celsius (GOES SST is often already in Celsius, but check source if issues arise)
-                # The MUR data was in Kelvin, GOES is usually in Celsius, so we skip conversion here
-                sst = sst_stack
-                sst.attrs["units"] = "C"
-                
-                # 3. Spatial mean → Monthly mean
-                # Note: The 'sst' asset is usually in Kelvin, but the GOES STAC may provide it in Celsius.
-                # Since you converted MUR SST, we'll assume Celsius. If issues, check the asset metadata.
-                sst = sst.mean(dim=["x", "y"])
-                sst = sst.resample(time="1ME").mean()
-                sst.name = "sst"
-                
-                results["sst"] = sst
-                print(f"GOES SST Monthly time steps created: {len(sst.time)}")
+def join_indices_and_env(
+    indices_ds: xr.Dataset,
+    sst_da: xr.DataArray,
+) -> pd.DataFrame:
+    """
+    Join Grace's monthly water-quality indices (NDWI, NDTI, NDCI)
+    with Kalu's SST time series into a single pandas DataFrame.
+    Assumes both share a 'time' coordinate.
+    """
+    # Convert to DataFrame
+    idx_df = indices_ds.to_dataframe().reset_index()  # columns: time, NDWI, NDTI, NDCI ...
+    sst_df = sst_da.to_series().reset_index()
+    sst_df = sst_df.rename(columns={sst_da.name: "sst_c"})
 
-            else:
-                print("No GOES SST items found for the given time and bbox.")
-                results["sst"] = None
+    # Merge on time
+    df = pd.merge(idx_df, sst_df, on="time", how="inner").sort_values("time")
+    return df
 
-        except Exception as e:
-            print(f"ERROR fetching GOES SST from STAC: {e}")
-            results["sst"] = None
 
-    # ======================
-    # SST (MUR Zarr - Fallback/Alternative)
-    # ======================
-    elif "sst" in variables and sst_source == "mur-zarr":
-        try:
-            ds = xr.open_zarr(
-                MUR_SST_URL,
-                consolidated=True,
-                storage_options={"anon": True},
-            )
+def compute_correlations_and_rmse(df: pd.DataFrame) -> Dict[str, float]:
+    """
+    Compute Pearson correlations and RMSE between indices and SST.
+    Expects columns: 'NDTI', 'NDCI', 'sst_c' in df.
+    Returns a dict of stats you can print or write to CSV.
+    """
+    stats: Dict[str, float] = {}
 
-            print("SST data successfully opened from MUR Zarr.")
+    # Drop rows with any NaNs in the variables of interest
+    sub = df[["NDTI", "NDCI", "sst_c"]].dropna()
+    if len(sub) == 0:
+        return stats
 
-            sst = (
-                ds["analysed_sst"]  
-                .sel(
-                    lat=slice(bbox[1], bbox[3]),
-                    lon=slice(bbox[0], bbox[2]),
-                )
-                .sel(time=slice(start_date, end_date))
-                .chunk({"time": "auto", "lat": -1, "lon": -1})
-            )
+    # Pearson correlations
+    stats["corr_NDTI_SST"] = sub["NDTI"].corr(sub["sst_c"])
+    stats["corr_NDCI_SST"] = sub["NDCI"].corr(sub["sst_c"])
 
-            print(f"MUR SST time steps selected: {len(sst.time)}")
+    # RMSE on standardized variables (puts them on similar scales)
+    for col in ["NDTI", "NDCI", "sst_c"]:
+        sub[col + "_z"] = (sub[col] - sub[col].mean()) / sub[col].std()
 
-            # Kelvin → Celsius (as in your original code)
-            sst = sst - 273.15
-            sst.attrs["units"] = "C"
+    stats["rmse_NDTI_SST_z"] = np.sqrt(((sub["NDTI_z"] - sub["sst_c_z"]) ** 2).mean())
+    stats["rmse_NDCI_SST_z"] = np.sqrt(((sub["NDCI_z"] - sub["sst_c_z"]) ** 2).mean())
 
-            # Spatial mean → Monthly mean
-            sst = sst.mean(dim=["lat", "lon"])
-            sst = sst.resample(time="1ME").mean()
-            sst.name = "sst"
+    return stats
 
-            results["sst"] = sst
 
-        except Exception as e:
-            print(f"ERROR fetching MUR SST: {e}")
-            results["sst"] = None
+def add_season_column(df: pd.DataFrame) -> pd.DataFrame:
+    """Add a 'season' column based on month."""
+    season_map = {
+        12: "Winter", 1: "Winter", 2: "Winter",
+        3: "Spring", 4: "Spring", 5: "Spring",
+        6: "Summer", 7: "Summer", 8: "Summer",
+        9: "Fall", 10: "Fall", 11: "Fall",
+    }
+    df = df.copy()
+    df["season"] = df["time"].dt.month.map(season_map)
+    return df
 
-    # ======================
-    # Precipitation (STAC) - Remains the same
-    # ======================
-    if "precip" in variables:
-        all_items: List[Item] = []
-        
-        # ... (Your original precip logic is here, using the 'client' object) ...
 
-        start_year = pd.to_datetime(start_date).year
-        end_year = pd.to_datetime(end_date).year
+def seasonal_means(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute seasonal means for indices and SST."""
+    df_season = add_season_column(df)
+    return (
+        df_season
+        .groupby("season")[["NDWI", "NDTI", "NDCI", "sst_c"]]
+        .mean()
+        .reindex(["Winter", "Spring", "Summer", "Fall"])
+    )
 
-        for year in range(start_year, end_year + 1):
-            y_start = f"{year}-01-01"
-            y_end = f"{year}-12-31"
 
-            if year == start_year:
-                y_start = start_date
-            if year == end_year:
-                y_end = end_date
+def run_pca(df: pd.DataFrame, n_components: int = 2) -> Dict[str, np.ndarray]:
+    """
+    Run PCA on standardized variables (NDWI, NDTI, NDCI, SST).
+    Returns loadings and explained variance.
+    """
+    sub = df[["NDWI", "NDTI", "NDCI", "sst_c"]].dropna()
+    if len(sub) == 0:
+        return {}
 
-            search = client.search(
-                collections=[precip_collection],
-                datetime=f"{y_start}/{y_end}",
-                bbox=bbox,
-            )
+    # Standardize
+    X = (sub - sub.mean()) / sub.std()
 
-            items = list(search.get_all_items())
-            all_items.extend(items)
+    pca = PCA(n_components=n_components)
+    pcs = pca.fit_transform(X)
 
-            print(f"Year {year}: {len(items)} precip items")
+    return {
+        "loadings": pca.components_,          # shape (n_components, 4)
+        "explained_variance": pca.explained_variance_ratio_,
+        "variables": ["NDWI", "NDTI", "NDCI", "sst_c"],
+        "pcs": pcs,
+    }
 
-        results["precip"] = all_items if all_items else None
 
-    return results
+def plot_monthly_timeseries(df: pd.DataFrame) -> None:
+    """Simple monthly time-series plot of indices and SST."""
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+
+    ax1.plot(df["time"], df["NDTI"], label="NDTI", color="tab:orange")
+    ax1.plot(df["time"], df["NDCI"], label="NDCI", color="tab:green")
+    ax1.set_ylabel("Index value")
+    ax1.legend(loc="upper left")
+
+    ax2 = ax1.twinx()
+    ax2.plot(df["time"], df["sst_c"], label="SST (°C)", color="tab:red")
+    ax2.set_ylabel("SST (°C)", color="tab:red")
+    ax2.tick_params(axis="y", labelcolor="tab:red")
+
+    ax1.set_xlabel("Time")
+    ax1.set_title("Monthly NDWI/NDTI/NDCI and SST – Tampa Bay")
+    fig.autofmt_xdate()
+    plt.tight_layout()
+    plt.show()

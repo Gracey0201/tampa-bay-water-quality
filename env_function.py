@@ -5,131 +5,123 @@ from pystac_client import Client as STACClient
 import planetary_computer as pc
 from pystac.item import Item
 
-# Define the comprehensive MUR SST URL globally
-MUR_SST_URL = "s3://mur-sst/zarr-v1"
 
 def environmental_variables(
     bbox: Tuple[float, float, float, float],
     start_date: str,
     end_date: str,
     variables: List[str] = ["sst", "precip"],
-    # Original SST URL is kept as default, but logic will fall back to MUR if needed.
-    sst_zarr_url: str = "s3://surftemp-sst/data/sst.zarr",  
-    precip_collection: str = "noaa-mrms-qpe-24h-pass2", # <<<--- CORRECTED BACK TO MRMS
-    stac_api_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1"
+    # Original SST URL is default, but the logic inside adapts to alternative URLs like MUR SST.
+    sst_zarr_url: str = "s3://surftemp-sst/data/sst.zarr",
+    precip_collection: str = "noaa-mrms-qpe-24h-pass2",
+    stac_api_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1",
 ) -> Dict[str, Union[xr.DataArray, List[Item], None]]:
     """
-    Modular environmental data fetcher for SST and Precipitation with SST fallback logic.
-    
-    Includes fixes for:
-    1. Truncated SST data (by falling back to MUR).
-    2. Cloud credential errors (by using storage_options={"anon": True}).
-    3. MUR variable name error (by using 'analysed_sst').
-    4. Universal Kelvin to Celsius conversion.
-    5. Uses the MRMS STAC collection for precipitation (as it returns items).
+    Modular environmental data fetcher for SST and Precipitation.
+
+    Parameters
+    ----------
+    bbox : (minx, miny, maxx, maxy)
+        Bounding box for spatial subsetting.
+    start_date, end_date : str
+        ISO date strings (e.g., "YYYY-MM-DD") for time subsetting.
+    variables : list of str
+        Requested variables (e.g., ["sst", "precip"]).
+    sst_zarr_url : str
+        URL to the Zarr store for Sea Surface Temperature.
+    precip_collection : str
+        STAC Collection ID for precipitation data.
+    stac_api_url : str
+        Base URL for the STAC API endpoint.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys matching the requested variables, containing either
+        an xr.DataArray (for SST) or a List[Item] (for Precipitation, or None if
+        the STAC API request fails or times out).
     """
 
-    results = {}
-    
-    # We check if the data goes up to the requested end date.
-    target_end_dt = pd.to_datetime(end_date)
-    
+    results: Dict[str, Union[xr.DataArray, List[Item], None]] = {}
+
+    # Define common variables based on the provided URL for modularity
+    is_mur_data = "mur-sst" in sst_zarr_url.lower()
+    sst_var_name = "sst" if is_mur_data else "analysed_sst"
+
     # ======================
-    # SST (Zarr) - Fully Modular and Adaptive with Fallback
+    # SST (Zarr) - Fully Modular and Adaptive
     # ======================
     if "sst" in variables:
-        # Use a list of URLs to try, starting with the provided one and falling back to MUR
-        urls_to_try = [sst_zarr_url, MUR_SST_URL]
-        
-        for url in urls_to_try:
-            try:
-                is_mur_data = "mur-sst" in url.lower()
-                
-                # FIX 1: Set SST variable name uniformly to 'analysed_sst'
-                sst_var_name = "analysed_sst" 
+        try:
+            ds = xr.open_zarr(sst_zarr_url, storage_options={"anon": True})
 
-                # 1. Open Zarr store - FIX 2: Added storage_options={"anon": True}
-                ds = xr.open_zarr(
-                    pc.sign(url),
-                    consolidated=True,
-                    storage_options={"anon": True}
+            # Select variable name dynamically based on the URL
+            sst = (
+                ds[sst_var_name]
+                .sel(
+                    time=slice(start_date, end_date),
+                    lat=slice(bbox[1], bbox[3]),
+                    lon=slice(bbox[0], bbox[2]),
                 )
-                
-                # 2. Check Truncation (if using the primary URL and it doesn't cover the time range)
-                last_dt_in_data = ds.time.max().values
-                if not is_mur_data and pd.to_datetime(last_dt_in_data) < target_end_dt:
-                    print(f"SST data from {url} is truncated (stops at {last_dt_in_data}). Trying fallback...")
-                    continue # Skip the rest of this try block and move to the next URL (MUR)
-                
-                print(f"SST data successfully fetched from: {url}")
+                .chunk({"time": "auto", "lat": -1, "lon": -1})
+            )
 
-                # 3. Apply spatial and temporal slicing
-                sst = (
-                    ds[sst_var_name]
-                    .sel(
-                        time=slice(start_date, end_date),
-                        lat=slice(bbox[1], bbox[3]),
-                        lon=slice(bbox[0], bbox[2])
-                    )
-                    .chunk({"time": "auto", "lat": -1, "lon": -1})
-                )
-
-                # 4. Apply Kelvin conversion 
-                print("Applying Kelvin to Celsius conversion.")
+            # Apply Kelvin conversion only if not MUR data
+            if not is_mur_data:
+                # Original dataset requires conversion from Kelvin to Celsius
                 sst = sst - 273.15
-                sst.attrs["units"] = "C"
-                    
-                # 5. Final aggregation logic
-                sst = sst.mean(dim=["lat", "lon"])
-                sst = sst.resample(time="1ME").mean()
-                sst.name = "sst"
+                print("Note: SST conversion (Kelvin to Celsius) applied.")
 
-                results["sst"] = sst
-                break # Success! Exit the loop
+            # Final aggregation logic (common to both)
+            sst = sst.mean(dim=["lat", "lon"])
+            sst = sst.resample(time="1ME").mean()
+            sst.name = "sst"
 
-            except Exception as e:
-                print(f"Error processing SST from {url}: {e}")
-                
-        if "sst" not in results:
-            print("ERROR: Could not fetch SST from any available source.")
+            results["sst"] = sst
+
+        except Exception as e:
+            print(f"SST fetch and processing failed: {e}")
             results["sst"] = None
 
     # ======================
-    # Precipitation (STAC) - Robust Item Retrieval (MRMS)
+    # Precipitation (STAC) - Robust Item Retrieval with timeout handling
     # ======================
     if "precip" in variables:
         all_items: List[Item] = []
 
-        client = STACClient.open(
-            stac_api_url,
-            modifier=pc.sign_inplace
-        )
-
-        # Loop through years to guarantee finding all items (pagination safety)
-        for year in range(
-            pd.to_datetime(start_date).year,
-            pd.to_datetime(end_date).year + 1
-        ):
-            y_start = f"{year}-01-01"
-            y_end = f"{year}-12-31"
-
-            if year == pd.to_datetime(start_date).year:
-                y_start = start_date
-            if year == pd.to_datetime(end_date).year:
-                y_end = end_date
-
-            search = client.search(
-                collections=[precip_collection],
-                datetime=f"{y_start}/{y_end}",
-                bbox=bbox,
+        try:
+            client = STACClient.open(
+                stac_api_url,
+                modifier=pc.sign_inplace,
             )
 
-            # search.get_all_items() handles the pagination logic
-            items_found = list(search.get_all_items())
-            all_items.extend(items_found)
-            print(f"Year {year}: {len(items_found)} precip items from {precip_collection}")
+            for year in range(
+                pd.to_datetime(start_date).year,
+                pd.to_datetime(end_date).year + 1,
+            ):
+                y_start = f"{year}-01-01"
+                y_end = f"{year}-12-31"
 
+                if year == pd.to_datetime(start_date).year:
+                    y_start = start_date
+                if year == pd.to_datetime(end_date).year:
+                    y_end = end_date
 
-        results["precip"] = all_items if all_items else None
+                search = client.search(
+                    collections=[precip_collection],
+                    datetime=f"{y_start}/{y_end}",
+                    bbox=bbox,
+                    # no limit → pagination handled internally
+                )
+
+                # This call may time out for large queries, so keep inside try/except
+                year_items = list(search.get_all_items())
+                all_items.extend(year_items)
+
+            results["precip"] = all_items if all_items else None
+
+        except Exception as e:
+            print(f"Precipitation search failed or timed out: {e}")
+            results["precip"] = None
 
     return results
