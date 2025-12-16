@@ -1,32 +1,33 @@
 name: geog313-final-project
 channels:
   - conda-forge
+  - defaults
 dependencies:
+  # Core Python + scientific stack
   - python=3.11
-  - jupyterlab=4.2.5
-  - pystac-client=0.7.5
-  - leafmap=0.38.5
-  - matplotlib
-  - seaborn
-  - dask=2024.9.1
-  - distributed=2024.9.1
-  - stackstac=0.5.0
   - numpy
   - pandas
   - xarray
   - rasterio
   - geopandas
   - shapely
+  - matplotlib
   - scipy
   - scikit-learn
-  - folium
-  - contetily
-  - fsspec
-  - s3fs
-  - planetary_computer
-  - zarr
-  - pyproj
+  - jupyterlab=4.2.5
+  - dask=2024.9.1
+  - distributed=2024.9.1
+  - stackstac=0.5.0
+  - leafmap=0.38.5
   - fiona
-  - pystac
+  - pyproj
+  - pip  # required to install PyPI-only packages
 
-
+  # PyPI-only packages
+  - pip:
+      - planetary-computer
+      - pystac
+      - zarr
+      - fsspec
+      - s3fs
+      - seaborn
