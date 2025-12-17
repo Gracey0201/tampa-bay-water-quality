@@ -1,61 +1,102 @@
+# spatial_utils.py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import cm
 
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
 def normalized_diff(b1, b2):
-    """Compute normalized difference (b1-b2)/(b1+b2)."""
+    """Compute normalized difference (b1 - b2) / (b1 + b2)."""
     return (b1 - b2) / (b1 + b2 + 1e-10)
 
-def plot_wqi_index_maps(stack, indices=["ndwi", "ndti", "ndci"], title="WQI Index Maps"):
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    
-    green = stack.sel(band='green')
-    red = stack.sel(band='red') 
-    nir = stack.sel(band='nir')
-    rededge1 = stack.sel(band='rededge1')
-    
-    ndwi = normalized_diff(green, nir)
-    ndti = normalized_diff(red, green)
-    ndci = normalized_diff(rededge1, red)
-    
-    maps = [ndwi.mean('time'), ndti.mean('time'), ndci.mean('time')]
-    map_names = ['NDWI', 'NDTI', 'NDCI']
-    
-    for i, (map_data, name) in enumerate(zip(maps, map_names)):
-        ax = axes[i//2, i%2]
-        map_data.plot(ax=ax, cmap='RdYlBu_r', vmin=-0.5, vmax=0.3)
-        ax.set_title(f'{name} - Annual Mean')
-    
-    ndwi_std = ndwi.std('time')
-    ndwi_std.plot(ax=axes[1,1], cmap='Reds', vmin=0, vmax=0.2)
-    axes[1,1].set_title('NDWI - Std Dev')
-    
-    plt.suptitle(title, fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    plt.savefig(f'{title.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
+
+# --------------------------------------------------
+# 1. Annual Mean WQI Maps
+# --------------------------------------------------
+def plot_wqi_mean_maps(
+    stack,
+    title="Tampa Bay Water Quality Index (Annual Mean)",
+    cmap="RdYlBu_r"
+):
+    """
+    Plot annual mean NDWI, NDTI, and NDCI maps from a stackstac stack.
+    """
+    # Extract bands
+    green = stack.sel(band="green")
+    red = stack.sel(band="red")
+    nir = stack.sel(band="nir")
+    rededge1 = stack.sel(band="rededge1")
+
+    # Compute indices
+    indices = {
+        "NDWI": normalized_diff(green, nir),
+        "NDTI": normalized_diff(red, green),
+        "NDCI": normalized_diff(rededge1, red),
+    }
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharex=True, sharey=True)
+
+    for ax, (name, data) in zip(axes, indices.items()):
+        mean_data = data.mean("time")
+        mean_data.plot(
+            ax=ax,
+            cmap=cmap,
+            vmin=-0.5,
+            vmax=0.3,
+            cbar_kwargs={"label": f"{name} Annual Mean"}
+        )
+        ax.set_title(f"{name} – Annual Mean", fontweight="bold")
+        ax.set_xlabel("Easting (m)")
+        ax.set_ylabel("Northing (m)")
+        ax.set_aspect("equal")
+
+    plt.suptitle(title, fontsize=16, fontweight="bold")
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig(f"{title.replace(' ', '_')}.png", dpi=300, bbox_inches="tight")
     plt.show()
 
-def plot_wqi_std_maps(stack, indices=["ndwi", "ndti", "ndci"], title="WQI Standard Deviation Maps"):
-    green = stack.sel(band='green')
-    red = stack.sel(band='red') 
-    nir = stack.sel(band='nir')
-    rededge1 = stack.sel(band='rededge1')
-    
-    ndwi = normalized_diff(green, nir)
-    ndti = normalized_diff(red, green)
-    ndci = normalized_diff(rededge1, red)
-    
-    fig, axes = plt.subplots(1, len(indices), figsize=(5*len(indices), 5))
-    if len(indices) == 1:
-        axes = [axes]
-    
-    std_maps = [ndwi.std('time'), ndti.std('time'), ndci.std('time')]
-    
-    for i, (std_map, idx) in enumerate(zip(std_maps, indices)):
-        std_map.plot(ax=axes[i], cmap='Reds', vmin=0, vmax=0.25)
-        axes[i].set_title(f'{idx.upper()} Std Dev')
-    
-    plt.suptitle(title, fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    plt.savefig(f'{title.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
+
+# --------------------------------------------------
+# 2. WQI Standard Deviation Maps (All Indices)
+# --------------------------------------------------
+def plot_wqi_std_maps(
+    stack,
+    title="Tampa Bay Water Quality Index (Temporal Variability)",
+    cmap="Reds"
+):
+    """
+    Plot standard deviation maps for NDWI, NDTI, and NDCI.
+    """
+    # Extract bands
+    green = stack.sel(band="green")
+    red = stack.sel(band="red")
+    nir = stack.sel(band="nir")
+    rededge1 = stack.sel(band="rededge1")
+
+    # Compute indices
+    indices = {
+        "NDWI": normalized_diff(green, nir),
+        "NDTI": normalized_diff(red, green),
+        "NDCI": normalized_diff(rededge1, red),
+    }
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharex=True, sharey=True)
+
+    for ax, (name, data) in zip(axes, indices.items()):
+        std_data = data.std("time")
+        std_data.plot(
+            ax=ax,
+            cmap=cmap,
+            vmin=0,
+            vmax=0.25,
+            cbar_kwargs={"label": f"{name} Std Dev"}
+        )
+        ax.set_title(f"{name} – Temporal Std Dev", fontweight="bold")
+        ax.set_xlabel("Easting (m)")
+        ax.set_ylabel("Northing (m)")
+        ax.set_aspect("equal")
+
+    plt.suptitle(title, fontsize=16, fontweight="bold")
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig(f"{title.replace(' ', '_')}.png", dpi=300, bbox_inches="tight")
     plt.show()
