@@ -1,14 +1,19 @@
-# Python cache
 __pycache__/
 *.pyc
 
-# IPython/Jupyter temp files
-.ipython/
-.cache/
+**/.ipython/
+**/.cache/
 
-# Existing ignores
-.config/
-.ipynb_checkpoints/
-.jupyter/
-.local/
+**/.config/
+**/.ipynb_checkpoints/
+**/.jupyter/
+**/.local/
+
+*.png
+*.csv
+!data/*.csv  
+
+outputs/
+
+.DS_Store
 
