@@ -9,58 +9,98 @@
 
 This project builds a modular, reproducible pipeline to link satellite‑derived water quality indices with large‑scale environmental drivers in Tampa Bay, Florida. It combines custom data access functions, statistical analysis, and robust error handling to evaluate how sea surface temperature (SST) co‑varies with Sentinel‑2–based water quality indicators (NDWI, NDTI, NDCI) over 2019–2022.[1]
 
-All analysis is implemented in Python using `xarray`, `dask`, `stackstac`, and STAC APIs, and is fully containerized via a conda environment and Docker image for reproducibility.
+All analysis is implemented in Python using xarray, dask, stackstac, and STAC APIs. The workflow is fully containerized with a Conda environment (including pip-installed packages) and a Docker image to ensure reproducibility.
 
 ***
 
-## Repository Structure
+### System Requirements
+Before running the project, ensure that you have the following installed on your machine:
 
-- `Notebook.ipynb`  
-  Main Jupyter notebook that orchestrates the full workflow: calls functions, runs diagnostics, computes indices, joins with SST, and performs correlation and PCA analysis. 
+- Docker
 
-- `env_function.py`  
-  - `environmental_variables(...)`: Fetches SST from a public Zarr archive and precipitation metadata from the Planetary Computer STAC API for a given bounding box and time window.  
-  - Returns SST as an `xarray.DataArray` (monthly mean, spatially averaged) and precipitation as a list of STAC `Item` objects or `None` if requests fail.[1]
+### Clone the Repository
 
-- `analysis.py`  
-  - `load_env_timeseries(...)`: Wrapper around `environmental_variables` to get monthly SST.  
-  - `join_indices_and_env(...)`: Merges Grace’s NDWI/NDTI/NDCI with Kalu’s SST into a single pandas DataFrame by time.  
-  - `compute_correlations_and_rmse(...)`: Computes Pearson correlations between indices and SST and standardized RMSE after z‑scoring.  
-  - `add_season_column(...)`, `seasonal_means(...)`: Adds a season label and aggregates NDWI, NDTI, NDCI, and SST to Winter/Spring/Summer/Fall means.  
-  - `run_pca(...)`: Runs PCA on standardized NDWI, NDTI, NDCI, and SST, returning loadings, explained variance, variables, and PCs.  
-  - `plot_monthly_timeseries(...)`: Dual‑axis plot of monthly NDTI/NDCI and SST.[2][3]
+```bash
+git clone https://github.com/Gracey0201/geog313-assignments.git
+cd geog313-assignments/assignment-4
+```
 
-- `grace_functions.py`  
-  - `compute_wqi_indices(...)`: Queries Sentinel‑2 L2A via Earth Search STAC, filters scenes by cloud cover, stacks bands with `stackstac`, computes NDWI/NDTI/NDCI, applies SCL‑based water masking, and aggregates to time series, rolling means, and monthly climatologies with detailed diagnostics for selected scenes.  
-  - `compute_indices(...)`: Backwards‑compatible alias calling `compute_wqi_indices` so existing imports in `analysis.py` continue to work.[4][1]
+### Steps to Run the Docker Container
+You may either pull the Docker image from Dockerhub or build the image locally.
 
-- `environment.yml`  
-  Conda environment specification:
+#### 1. Pull or Build the Docker Image (recommended)
+```bash
+docker pull geog313-final-project
+```
+Optionally, you can build the Docker image locally from the project folder
 
-  - `name: geog313-final-project`  
-  - Core packages: `python=3.11`, `jupyterlab`, `pystac-client`, `stackstac`, `dask`, `distributed`, `xarray`, `rasterio`, `geopandas`, `scikit-learn`, `zarr`, `s3fs`, etc.  
-  - `pip` extras: `planetary-computer`, `pystac-client`, `stackstac`.[1]
+```bash
+docker build -t geog313-final-project .
+```
+#### 2. Run the container
+```bash
+docker run -it -p 8888:8888 -p 8787:8787 -v $(pwd):/home/jupyteruser/ --name wqi_container geog313-final-project
 
-- `Dockerfile`  
-  Docker configuration based on `continuumio/miniconda3:24.7.1-0`:
+```
+- Port `8888` is used by JupyterLab
+- Port `8787` is used by Dask Dashboard
 
-  - Builds the `geog313-final-project` conda environment from `environment.yml`.  
-  - Activates the environment via `.bashrc` and `PATH`.  
-  - Creates non‑root user `jupyteruser` and sets `/home/jupyteruser` as `WORKDIR`.  
-  - Exposes ports `8888` (JupyterLab) and `8787` (Dask dashboard).  
-  - Starts JupyterLab with `CMD ["jupyter", "lab", "--ip=0.0.0.0"]`.[1]
+#### 3. Access JupyterLab
+- Once the container starts, JupyterLab will launch automatically.
+- Copy the access token printed in the terminal and paste it into your browser.
 
-- `kalu_environmental.csv`, `kalu_sst_data.csv`, `kalu_precip_data.csv`  
-  Exported SST and environmental results (optional artifacts).
-
-- `results/`  
-  Folder for derived outputs (plots, tables, metrics).
+#### 4. Open and Run the Notebooks
+Inside JupyterLab, navigate to the `src/notebooks/` directory and open the notebooks in sequence to reproduce the analysis.
 
 ***
+### Stopping and Managing the Container
+```bash
+docker stop wqi_container
+```
 
+### To Restart the Container Use
+```bash
+docker start -i wqi_container
+```
+### To Remove the Container Use
+```bash
+docker rm wqi_container
+```
+
+### To Remove the Image Use
+```bash
+docker rmi geog313-final-project
+```
+***
+
+### Notebook Overview (src/notebooks)
+
+| Notebook                       | Objective                                                              |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `WQI.ipynb`                    | Compute NDWI, NDTI, and NDCI from Sentinel-2 imagery                 |
+| `WQI_plots.ipynb`              | Visualize temporal trends and distributions of water quality indices |
+| `WQI_precip_correlation.ipynb` | Correlation analysis between water quality indices and precipitation |
+| `WQI_spatial_maps.ipynb`       | Spatial mapping of turbidity and chlorophyll hotspots                |
+| `env.ipynb`                    | Aggregate SST and precipitation datasets                             |
+
+***
+### Util Overview (src/utils)
+
+| File                       | Description                                             |
+| -------------------------- | ------------------------------------------------------- |
+| `stack_loader.py`          | Loads and stacks STAC-based datasets using StackSTAC    |
+| `WQI_utils.py`             | Functions to compute NDWI, NDTI, and NDCI               |
+| `env_variables_utils.py`   | SST and precipitation aggregation functions             |
+| `analysis_utils.py`        | Temporal aggregation and statistical analysis utilities |
+| `analysis_plots_utils.py`  | Time-series and comparative plotting functions          |
+| `spatial_utils.py`         | Spatial processing and hotspot detection                |
+| `spatial_wrapper_utils.py` | Wrapper functions for spatial analyses                  |
+
+
+***
 ## Methods Summary
 
-### Environmental data (env_function.py)
+### Environmental data (env_utils.py)
 
 `environmental_variables` provides a generic interface to environmental drivers:
 
@@ -70,7 +110,7 @@ All analysis is implemented in Python using `xarray`, `dask`, `stackstac`, and S
 
 The function returns a dictionary with SST as an `xarray.DataArray` and precipitation as a list of STAC `Item`s or `None`.
 
-### Water quality indices (grace_functions.py)
+### Water quality indices (WQI_utils.py)
 
 `compute_wqi_indices` implements the Sentinel‑2 WQI pipeline:
 
@@ -79,63 +119,18 @@ The function returns a dictionary with SST as an `xarray.DataArray` and precipit
 - Uses `stackstac.stack` to build a lazy 4‑D array over bands `green`, `red`, `nir`, `rededge1`, and `scl`.  
 - Computes NDWI, NDTI, and NDCI via a normalized difference function and applies an SCL‑based water mask (classes 5–6) to focus on water pixels.  
 - Aggregates indices to spatial means/medians per time step, builds a dataset of NDWI/NDTI/NDCI statistics, and converts to a pandas DataFrame with a datetime index.  
-- Computes rolling means over a user‑defined window and monthly climatologies for all indices.[4][1]
+- Computes rolling means over a user‑defined window and monthly climatologies for all indices.
 
-A rich diagnostics loop prints thumbnails, cloud metadata, SCL cloud/water ratios, and NDWI “sanity checks” for the first few scenes. This was hardened with explicit `scene = None` guards and `try/except` around `sel(time=...)` and SCL/NDWI calculations to avoid crashes when time coordinates are duplicated or non‑unique.[5][6]
+- To verify that the Sentinel‑2 inputs over Tampa Bay were suitable for water‑quality analysis, a diagnostics mode was implemented that inspects the first few scenes prior to index computation. For each of the first five acquisitions, the workflow reports the acquisition date and ID, thumbnail link, and metadata cloud cover, then uses the SCL band to quantify the fraction of cloud vs. water pixels and the number of valid observations. It also computes a scene‑average NDWI sanity check (green vs. NIR) to flag obviously contaminated scenes (e.g., strongly positive NDWI suggesting land or cloud influence). This diagnostic loop provides a quick, reproducible quality‑control snapshot of typical scenes and documents that the subsequent NDWI/NDTI/NDCI time series is based on predominantly cloud‑free water pixels rather than artifacts.
 
-### Joining indices and environment (analysis.py)
+- To ensure a clean and physically meaningful water‑quality time series, the workflow uses strict daily sub‑sampling rather than multi‑scene mosaics. Sentinel‑2 scenes are first filtered to retain only observations with less than 20% eo:cloud_cover, removing heavily contaminated acquisitions. From the remaining scenes, only the single lowest‑cloud‑cover image for each date is kept, so there is at most one scene per day entering the analysis. This daily de‑duplication is applied before stacking and computing NDWI, NDTI, and NDCI for Tampa Bay. By avoiding mosaicking of multiple intra‑day scenes, the method prevents artificial smoothing and pixel mixing that could distort temporal variability in the indices. The result is a temporally consistent water‑quality time series in which changes reflect real environmental dynamics rather than artifacts of overlapping Sentinel‑2 acquisitions. 
 
-The analysis module links WQI indices to SST:
-
-1. **Load SST time series**
-
-   ```python
-   env_da = load_env_timeseries(bbox, start_date, end_date)
-   ```
-
-   This returns a monthly SST series (`sst_c`) over Tampa Bay or raises a clear error if SST cannot be retrieved.
-
-2. **Compute WQI indices**
-
-   ```python
-   wqi_df, wqi_rolling, wqi_monthly = compute_wqi_indices(
-       bbox=bbox,
-       start_date=start_date,
-       end_date=end_date,
-       export_csv=False,
-       anomaly_detection=True,
-       rolling_window=3,
-   )
-   ```
-
-3. **Join indices and SST**
-
-   ```python
-   df = join_indices_and_env(wqi_df, env_da)
-   ```
-
-   Produces a pandas DataFrame with columns like `NDWI`, `NDTI`, `NDCI`, and `sst_c` on a common time index.
-
-4. **Correlations and standardized RMSE**
-
-   ```python
-   stats = compute_correlations_and_rmse(df)
-   ```
-
-   - Computes Pearson correlations `corr_NDTI_SST` and `corr_NDCI_SST`.  
-   - Z‑scores `NDTI`, `NDCI`, and `sst_c` and computes RMSE between z‑scored indices and z‑scored SST to quantify mismatch on a common scale.[2]
-
-5. **Seasonal means and PCA**
-
-   - `seasonal_means(df)` groups by derived season (Winter, Spring, Summer, Fall) and computes average NDWI/NDTI/NDCI/SST.  
-   - `run_pca(df, n_components=2)` standardizes NDWI, NDTI, NDCI, and SST, runs PCA, and returns loadings, explained variance ratios, variable names, and PC scores for interpretation.[3]
-
-6. **Visualization**
-
-   - `plot_monthly_timeseries(df)` draws a dual‑axis plot with NDTI/NDCI on the left y‑axis and SST on the right y‑axis, supporting visual comparison of temporal co‑variability.
+#### Literature justification
+- Griffiths et al. (2019) show that temporal compositing based on the single best‑quality observation per interval (e.g., daily or weekly) preserves phenology and land‑surface dynamics better than pixel‑based mosaics, which can mix acquisitions and introduce cross‑scene artifacts.
+- Li & Roy (2017) and related work on harmonized Landsat–Sentinel data demonstrate that single‑date, quality‑filtered observations are preferred for water‑index time series because mosaicking can smooth signals and mix viewing/illumination geometries, degrading change‑detection performance.
+- Copernicus Sentinel‑2 processing guidance recommends temporal filtering to one acquisition per time step for consistent analysis of indices such as NDWI, NDTI, and NDCI, rather than relying on automatic mosaicking, especially when intra‑orbit variability and cloud contamination are concerns
 
 ***
-
 ## Error Handling and Limitations
 
 Two key external issues were observed:
@@ -149,88 +144,29 @@ Two key external issues were observed:
 Despite these measures, full reproducibility still depends on external cloud services (Earth Search, Sentinel‑COGs, Planetary Computer) being available and responsive at runtime.
 
 ***
-
-## How to Run the Project
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/Gracey0201/geog313-final-project.git
-cd geog313-final-project
-```
-
-### 2. Create and activate the conda environment
-
-```bash
-conda env create -f environment.yml
-conda activate geog313-final-project
-```
-
-### 3. Option A – Run locally with JupyterLab
-
-```bash
-jupyter lab
-```
-
-Then open `Notebook.ipynb`, ensure the kernel is set to `geog313-final-project`, and run all cells in order.
-
-### 4. Option B – Run using Docker
-
-1. Build the image:
-
-```bash
-docker build -t geog313-final-project .
-```
-
-2. Run the container:
-
-```bash
-docker run -it --rm \
-  -p 8888:8888 -p 8787:8787 \
-  -v $(pwd):/home/jupyteruser/project \
-  geog313-final-project
-```
-
-3. Copy the JupyterLab URL from the container logs into your browser and open `project/Notebook.ipynb`.
+#### References
+- Griffiths, P., Nendel, C., & Hostert, P. (2019). Intra-annual reflectance composites from Sentinel-2 and Landsat for national-scale crop and land cover mapping. Remote sensing of environment, 220, 135-151.
+- Ju, J., Zhou, Q., Freitag, B., Roy, D. P., Zhang, H. K., Sridhar, M., ... & Neigh, C. S. (2025). The Harmonized Landsat and Sentinel-2 version 2.0 surface reflectance dataset. Remote Sensing of Environment, 324, 114723.
+-  [ESA Sentinel-2 Documentation](https://documentation.dataspace.copernicus.eu/Data/SentinelMissions/Sentinel2.html)
 
 ***
+#### AI Use Policy
 
-## Team Roles
+In addition to using the lecture notes and resources (especially in creating functions), AI tools were also utilized both in generating codes, scripts (mostly generating utils) and documentations to support the development of this project. Howevwer, all AI-generated content has been carefully reviewed to ensure accuracy and correctness.
+
+***
+#### Team Roles
 
 - **Grace Nwachukwu**
-  - Developed WQI functions and Sentinel‑2 processing (NDWI, NDTI, NDCI).  
-  - Implemented STAC queries, diagnostics, and mapping‑ready outputs.
-
+  - Developed all functions and accompanied notebooks for water quality analysis, plots and maps .
+  
 - **Kalu Okigwe**
-  - Developed environmental data functions for SST (and precipitation).  
-  - Implemented join, correlation, RMSE, seasonal means, PCA, and time‑series plots.
+  - Developed functions and accompanied notebooks for environmental variables (SST and precipitation)analysis and plots.  
 
 - **Joint**
-  - Designed the integrated pipeline, Docker/conda setup, and reproducible notebook.  
+  - Designed the integrated pipeline, Docker/conda setup.  
   - Wrote documentation and coordinated Git/GitHub workflow.
+  - produced the notebook and codes for the pearson correlation, RMSE, and PCA, plots.
+***
 
 
-
-## PROJECT SUMMARY
-
-This project builds a modular, reproducible pipeline to link satellite‑derived water quality indices with large‑scale environmental drivers in Tampa Bay. It combines custom data access functions, statistical analysis, and robust error handling to evaluate how sea surface temperature co‑varies with Sentinel‑2 water quality indicators.
-
-## Environmental data function (env_function.py)
-
-The `environmental_variables` function provides a generic interface to fetch sea surface temperature (SST) from a public Zarr archive and precipitation metadata from the Planetary Computer STAC API for any bounding box and time window. It dynamically handles different SST products by switching between `analysed_sst` and `sst` variable names and, when needed, converts Kelvin to Celsius before aggregating to monthly, spatially averaged time series. SST is returned as an `xarray.DataArray` with a monthly `time` coordinate, while precipitation is returned as a list of STAC `Item` objects or `None` if the STAC search fails or times out, which is explicitly handled in `try/except` blocks.
-
-## Analysis module (analysis.py)
-
-The analysis module wraps the environmental function and Grace’s indices into a coherent workflow. `load_env_timeseries` calls `environmental_variables` and extracts a monthly SST series over Tampa Bay, raising a clear error if SST cannot be retrieved. `join_indices_and_env` merges Grace’s monthly NDWI, NDTI, and NDCI with Kalu’s SST into a single pandas DataFrame keyed on a shared time coordinate, which is then used for statistical analysis. `compute_correlations_and_rmse` computes Pearson correlations between each index and SST and standardized RMSE (after z‑scoring) to place all variables on comparable scales, while `seasonal_means` aggregates NDWI, NDTI, NDCI, and SST into climatological means for Winter, Spring, Summer, and Fall using a derived `season` column. [web:39][web:37]
-
-## PCA and visualization
-
-The `run_pca` function performs principal component analysis on standardized NDWI, NDTI, NDCI, and SST, returning PCA loadings, explained variance ratios, variable names, and principal component scores. This allows quantifying the dominant joint modes of variability between water quality indices and SST and identifying which variables load most strongly on each component. The `plot_monthly_timeseries` helper produces a dual‑axis plot of monthly NDTI/NDCI and SST, enabling visual inspection of co‑variability and potential lagged relationships between surface temperature and optically derived indices in Tampa Bay.
-
-## Water quality index function (grace_functions.py)
-
-Grace’s function, `compute_wqi_indices`, was adapted into a robust index engine that queries Sentinel‑2 L2A via the Earth Search STAC API, filters scenes by cloud cover, and computes NDWI, NDTI, and NDCI using `stackstac` over the Tampa Bay bounding box. It includes a rich diagnostics loop for the first few scenes, printing thumbnails, cloud metadata, Scene Classification Layer (SCL) cloud and water fractions, and “sanity check” NDWI values; this loop was hardened by guarding against duplicate or non‑unique time indices and catching selection errors so that scene diagnostics never crash the main computation. The function produces time‑indexed NDWI/NDTI/NDCI mean and median series, rolling smoothed versions, and monthly climatologies, and a backwards‑compatible `compute_indices` alias ensures existing imports in `analysis.py` continue to work.
-
-## Error handling and network robustness
-
-While running the pipeline, two external issues were identified: (1) xarray’s “Reindexing only valid with uniquely valued Index objects” when selecting scenes by time, and (2) `RasterioIOError` / CURL “Recv failure: Connection reset by peer” when reading remote Sentinel‑2 COG tiles through `stackstac`. The first was mitigated by explicitly catching selection errors and skipping SCL/NDWI diagnostics if `scene` could not be safely defined, while the second was documented as a transient network/remote host problem and addressed by recommending smaller `max_items`, narrower time windows, reruns, and wrapping the final `.compute()` in a `try/except` to convert fatal errors into warnings. This treatment aligns with community reports of similar CURL and reindexing errors in remote EO workflows and demonstrates a clear understanding of the limits and behavior of cloud‑hosted COG access.
