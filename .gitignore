@@ -1,4 +1,4 @@
-.__pycache__/
+__pycache__/
 *.pyc
 
 **/.ipython/
@@ -9,18 +9,17 @@
 **/.jupyter/
 **/.local/
 
-# Data & outputs
 *.png
-*.csv
-!data/*.csv
+*.csv       
+!data/prrocessed/sst_monthly.csv
+!data/processed/precip_monthly.csv
+!data/processed/env.csv
+!data/processed/indices_results.csv
 
 outputs/
 
 .DS_Store
 
-# =============================
-# Utils: ignore all, allow core
-# =============================
 scr/utils/*
 !scr/utils/WQI_utils.py
 !scr/utils/analysis_utils.py
