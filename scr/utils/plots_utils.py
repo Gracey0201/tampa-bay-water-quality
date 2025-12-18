@@ -4,12 +4,29 @@ from matplotlib.dates import DateFormatter
 import calendar
 import numpy as np
 
-
-# ime Series Plot
 def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "ndci"], 
                          title="WQI Time Series", show_anomalies=True, anomaly_suffix="_mean_anomaly"):
     """
-    Enhanced time series plot for mean/median/rolling + anomalies.
+    Plot WQI time series with mean, median, and optional rolling mean and anomalies.
+
+    Parameters
+    ----------
+    df_results : pd.DataFrame
+        WQI time series with columns '{index}_mean', '{index}_median', and optional anomaly flags.
+    df_rolling : pd.DataFrame, optional
+        Rolling mean values for indices, plotted in the rolling panel.
+    indices : list of str
+        WQI indices to plot.
+    title : str
+        Figure title (also used for PNG filename).
+    show_anomalies : bool
+        If True, mark anomalies in the mean panel.
+    anomaly_suffix : str
+        Suffix for anomaly flag columns in df_results.
+
+    Returns
+    -------
+    None
     """
     n_indices = len(indices)
     fig, axes = plt.subplots(n_indices, 3, figsize=(18, 4*n_indices), sharex=True)
@@ -65,108 +82,3 @@ def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.savefig(f'{title.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
     plt.show()
-
-
-
-# Seasonal Plot
-def plot_wqi_seasonal(monthly_avg, indices=["ndwi", "ndti", "ndci"], title="WQI Seasonal Cycle"):
-    """
-    Enhanced seasonal plot with separate mean/median panels + full 12-month axis.
-    """
-    # Reindex to full 12 months
-    all_months = [calendar.month_name[m] for m in range(1, 13)]
-    monthly_12 = monthly_avg.reindex(all_months).fillna(np.nan)
-    
-    x_pos = range(12)
-    
-    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-    
-    colors = ['blue', 'orange', 'green']
-    
-    # MEAN panel
-    ax_mean = axes[0]
-    for idx, color in zip(indices, colors):
-        if f'{idx}_mean' in monthly_12.columns:
-            ax_mean.plot(x_pos, monthly_12[f'{idx}_mean'], 'o-', 
-                         color=color, linewidth=3, markersize=10, label=f'{idx.upper()} mean')
-    ax_mean.set_title('Seasonal Cycle - MEANS', fontweight='bold', fontsize=14)
-    ax_mean.grid(alpha=0.3)
-    ax_mean.legend()
-    
-    # MEDIAN panel
-    ax_med = axes[1]
-    for idx, color in zip(indices, colors):
-        if f'{idx}_median' in monthly_12.columns:
-            ax_med.plot(x_pos, monthly_12[f'{idx}_median'], 's--', 
-                        color=color, linewidth=2.5, markersize=8, label=f'{idx.upper()} median')
-    ax_med.set_title('Seasonal Cycle - MEDIANS', fontweight='bold', fontsize=14)
-    ax_med.grid(alpha=0.3)
-    ax_med.legend()
-    
-    # X-axis labels
-    plt.xticks(x_pos, all_months, rotation=45)
-    
-    fig.suptitle(title, fontsize=16, fontweight='bold')
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.savefig(f'{title.replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
-    plt.show()
-
-
-
-# generating multi-Season Plot
-def plot_wqi_seasons(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI by Season"):
-    """
-    Plot WQI indices grouped by meteorological seasons (Winter, Spring, Summer, Fall).
-    """
-    # Assign seasons with full names
-    seasons = {
-        12: 'Winter', 1: 'Winter', 2: 'Winter',
-        3: 'Spring', 4: 'Spring', 5: 'Spring',
-        6: 'Summer', 7: 'Summer', 8: 'Summer',
-        9: 'Fall', 10: 'Fall', 11: 'Fall'
-    }
-    df_results['season'] = df_results.index.month.map(seasons)
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    colors = ['blue', 'orange', 'green']
-    
-    for idx, color in zip(indices, colors):
-        means = df_results.groupby('season')[f'{idx}_mean'].mean()
-        # Order explicitly so it always goes Winter->Spring->Summer->Fall
-        ordered = ['Winter', 'Spring', 'Summer', 'Fall']
-        ax.plot(ordered, means[ordered], 'o-', color=color, linewidth=3, markersize=8, label=f'{idx.upper()} mean')
-    
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.set_ylabel("Index Value")
-    ax.grid(alpha=0.3)
-    ax.legend()
-    plt.tight_layout()
-    plt.show()
-
-
-
-
-# Pie Chart Plot
-def plot_wqi_pie_charts(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI Pie Chart"):
-    """
-    Generate pie charts showing the fraction of positive vs negative index values.
-    """
-    fig, axes = plt.subplots(1, len(indices), figsize=(5*len(indices), 5))
-    if len(indices) == 1:
-        axes = [axes]
-    
-    colors = ['green', 'red']
-    
-    for ax, idx in zip(axes, indices):
-        if f'{idx}_mean' in df_results.columns:
-            pos = (df_results[f'{idx}_mean'] > 0).sum()
-            neg = (df_results[f'{idx}_mean'] <= 0).sum()
-            ax.pie([pos, neg], labels=['Positive', 'Negative'], autopct='%1.1f%%', colors=colors, startangle=90)
-            ax.set_title(f'{idx.upper()} Positive vs Negative')
-    
-    fig.suptitle(title, fontsize=16, fontweight='bold')
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.show()
-
-

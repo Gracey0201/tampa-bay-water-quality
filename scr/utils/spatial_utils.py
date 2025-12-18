@@ -1,11 +1,21 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 def normalized_diff(b1, b2):
-    """Compute normalized difference (b1 - b2) / (b1 + b2)."""
-    return (b1 - b2) / (b1 + b2 + 1e-10)
+    """
+    Compute the normalized difference between two arrays.
 
+    Parameters
+    ----------
+    b1, b2 : array-like
+        Input arrays (e.g., image bands).
+
+    Returns
+    -------
+    np.ndarray
+        Normalized difference (b1 - b2) / (b1 + b2), with small epsilon to avoid division by zero.
+    """
+    return (b1 - b2) / (b1 + b2 + 1e-10)
 
 
 # Annual Mean WQI Maps
@@ -15,7 +25,20 @@ def plot_wqi_mean_maps(
     cmap="RdYlBu_r"
 ):
     """
-    Plot annual mean NDWI, NDTI, and NDCI maps from a stackstac stack.
+    Plot annual mean maps of NDWI, NDTI, and NDCI from a stackstac stack.
+
+    Parameters
+    ----------
+    stack : xarray.Dataset
+        Multi-band stack containing at least 'green', 'red', 'nir', 'rededge1'.
+    title : str
+        Title for the figure and PNG file.
+    cmap : str
+        Colormap to use for plotting.
+
+    Returns
+    -------
+    None
     """
     # Extract bands
     green = stack.sel(band="green")
@@ -59,7 +82,20 @@ def plot_wqi_std_maps(
     cmap="Reds"
 ):
     """
-    Plot standard deviation maps for NDWI, NDTI, and NDCI.
+    Plot temporal standard deviation maps of NDWI, NDTI, and NDCI from a stackstac stack.
+
+    Parameters
+    ----------
+    stack : xarray.Dataset
+        Multi-band stack containing at least 'green', 'red', 'nir', 'rededge1'.
+    title : str
+        Title for the figure and PNG file.
+    cmap : str
+        Colormap to use for plotting.
+
+    Returns
+    -------
+    None
     """
     # Extract bands
     green = stack.sel(band="green")

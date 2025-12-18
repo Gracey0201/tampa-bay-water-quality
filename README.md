@@ -93,6 +93,9 @@ docker rmi geog313-final-project
 | `plots_utils.py`           | Time-series and comparative plotting functions          |
 | `spatial_utils.py`         | Spatial processing, mapping and hotspot detection       |
 
+***
+#### Workflow Summary
+To manage computationally intensive tasks efficiently, the analysis was split across multiple notebooks. One notebook handles the computation and plotting of water quality indices, while another evaluates environmental variables using team-developed functions. A separate notebook generates spatial maps for both sets of data. Finally, the correlation analysis notebook reads the precomputed CSV outputs from the other notebooks, allowing exploration of relationships between water quality and environmental variables without rerunning the heavy computations, saving both time and memory.
 
 ***
 ## Methods Summary
