@@ -128,7 +128,7 @@ The function returns a dictionary with SST as an `xarray.DataArray` and precipit
 - Copernicus Sentinel‑2 processing guidance recommends temporal filtering to one acquisition per time step for consistent analysis of indices such as NDWI, NDTI, and NDCI, rather than relying on automatic mosaicking, especially when intra‑orbit variability and cloud contamination are concerns
 
 ***
-## Error Handling and Limitations
+#### Error Handling and Limitations
 
 Two key external issues were observed:
 
