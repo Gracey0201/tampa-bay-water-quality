@@ -1,39 +1,51 @@
+# ------------------------
+# Python cache files
+# ------------------------
 __pycache__/
 *.pyc
 
+# ------------------------
+# Jupyter, IPython, and notebook checkpoints
+# ------------------------
 **/.ipython/
 **/.cache/
-
 **/.config/
 **/.ipynb_checkpoints/
 **/.jupyter/
 **/.local/
 
+# ------------------------
+# Images and CSVs
+# ------------------------
 *.png
-*.csv       
-!data/prrocessed/sst_monthly.csv
+*.csv
+
+# Track only these processed CSV files
+!data/processed/sst_monthly.csv
 !data/processed/precip_monthly.csv
 !data/processed/env.csv
 !data/processed/indices_results.csv
+!data/processed/indices_monthly.csv
+!data/processed/indices_rolling.csv
 
+# ------------------------
+# Output folders
+# ------------------------
 outputs/
 
+# ------------------------
+# macOS system files
+# ------------------------
 .DS_Store
 
+# ------------------------
+# Utils folder — ignore everything by default
+# Track only the core utility files
+# ------------------------
 scr/utils/*
 !scr/utils/WQI_utils.py
-!scr/utils/analysis_utils.py
-!scr/utils/analysis_plots_utils.py
-!scr/utils/plots_utils.py
-!scr/utils/spatial_utils.py
 !scr/utils/stack_loader.py
-
-# =============================
-# Notebooks: ignore all, allow core
-# =============================
-scr/notebooks/*
-!scr/notebooks/WQI.ipynb
-!scr/notebooks/WQI_spatial.ipynb
-!scr/notebooks/WQI_precip_correlation.ipynb
-!scr/notebooks/env.ipynb
+!scr/utils/spatial_utils.py
+!scr/utils/plots_utils.py
+!scr/utils/env_variables_utils.py
 
