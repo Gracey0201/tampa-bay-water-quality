@@ -14,8 +14,8 @@ def normalized_diff(b1, b2):
 
 def compute_wqi_indices(
     bbox=TAMPA_BAY,
-    start_date="2018-01-01",
-    end_date="2022-12-31",
+    start_date="2019-01-01",
+    end_date="2024-12-31",
     max_items=500,
     epsg=32617,
     filter_clouds=True,

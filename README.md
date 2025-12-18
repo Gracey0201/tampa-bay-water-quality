@@ -16,7 +16,7 @@ All analysis is implemented in Python using xarray, dask, stackstac, and STAC AP
 ### System Requirements
 Before running the project, ensure that you have the following installed on your machine:
 
-- Docker
+- [Docker](https://docs.docker.com/get-started/get-docker/)
 
 ### Clone the Repository
 
@@ -75,13 +75,12 @@ docker rmi geog313-final-project
 
 ### Notebook Overview (src/notebooks)
 
-| Notebook                       | Objective                                                              |
+| Notebook                       | Objective                                                            |
 | ------------------------------ | -------------------------------------------------------------------- |
 | `WQI.ipynb`                    | Compute NDWI, NDTI, and NDCI from Sentinel-2 imagery                 |
-| `WQI_plots.ipynb`              | Visualize temporal trends and distributions of water quality indices |
 | `WQI_precip_correlation.ipynb` | Correlation analysis between water quality indices and precipitation |
-| `WQI_spatial_maps.ipynb`       | Spatial mapping of turbidity and chlorophyll hotspots                |
-| `env.ipynb`                    | Aggregate SST and precipitation datasets                             |
+| `WQI_spatial_maps.ipynb`       | Spatial mapping of water quality indices                             |
+| `env_variables.ipynb`          | Aggregate SST and precipitation datasets                             |
 
 ***
 ### Util Overview (src/utils)
@@ -91,10 +90,8 @@ docker rmi geog313-final-project
 | `stack_loader.py`          | Loads and stacks STAC-based datasets using StackSTAC    |
 | `WQI_utils.py`             | Functions to compute NDWI, NDTI, and NDCI               |
 | `env_variables_utils.py`   | SST and precipitation aggregation functions             |
-| `analysis_utils.py`        | Temporal aggregation and statistical analysis utilities |
-| `analysis_plots_utils.py`  | Time-series and comparative plotting functions          |
-| `spatial_utils.py`         | Spatial processing and hotspot detection                |
-| `spatial_wrapper_utils.py` | Wrapper functions for spatial analyses                  |
+| `plots_utils.py`           | Time-series and comparative plotting functions          |
+| `spatial_utils.py`         | Spatial processing, mapping and hotspot detection       |
 
 
 ***
@@ -151,10 +148,18 @@ Despite these measures, full reproducibility still depends on external cloud ser
 
 ***
 #### AI Use Policy
-
 In addition to using the lecture notes and resources (especially in creating functions), AI tools were also utilized both in generating codes, scripts (mostly generating utils) and documentations to support the development of this project. Howevwer, all AI-generated content has been carefully reviewed to ensure accuracy and correctness.
 
 ***
+***
+#### Environmental Variables Documentation And Limitation
+Precipitation (NOAA MRMS QPE 24h Pass2)
+The noaa-mrms-qpe-24h-pass2 dataset provides high-resolution (1 km) quantitative precipitation estimates from NEXRAD radar networks across the contiguous U.S., updated every 24 hours with quality-controlled pass-2 processing. Temporal gaps in 2019-2020 often result from sparse radar coverage in coastal regions like Tampa Bay or delayed STAC ingestion.
+
+SST (surftemp-sst Zarr)
+The surftemp-sst Zarr dataset contains daily analyzed sea surface temperature fields derived from satellite infrared radiometers, stored in Kelvin units requiring conversion to Celsius (-273.15). NaN values occur in coastal/high-latitude areas due to missing Zarr tiles from cloud cover or land masking in the original satellite processing.
+***
+
 #### Team Roles
 
 - **Grace Nwachukwu**

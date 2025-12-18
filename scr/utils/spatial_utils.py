@@ -1,18 +1,14 @@
-# spatial_utils.py
 import matplotlib.pyplot as plt
 import numpy as np
 
-# --------------------------------------------------
-# Helpers
-# --------------------------------------------------
+
 def normalized_diff(b1, b2):
     """Compute normalized difference (b1 - b2) / (b1 + b2)."""
     return (b1 - b2) / (b1 + b2 + 1e-10)
 
 
-# --------------------------------------------------
-# 1. Annual Mean WQI Maps
-# --------------------------------------------------
+
+# Annual Mean WQI Maps
 def plot_wqi_mean_maps(
     stack,
     title="Tampa Bay Water Quality Index (Annual Mean)",
@@ -56,9 +52,7 @@ def plot_wqi_mean_maps(
     plt.show()
 
 
-# --------------------------------------------------
-# 2. WQI Standard Deviation Maps (All Indices)
-# --------------------------------------------------
+# WQI Standard Deviation Maps (All Indices)
 def plot_wqi_std_maps(
     stack,
     title="Tampa Bay Water Quality Index (Temporal Variability)",

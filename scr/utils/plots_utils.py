@@ -5,7 +5,7 @@ import calendar
 import numpy as np
 
 
-# 1. Time Series Plot
+# ime Series Plot
 def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "ndci"], 
                          title="WQI Time Series", show_anomalies=True, anomaly_suffix="_mean_anomaly"):
     """
@@ -68,8 +68,7 @@ def plot_wqi_time_series(df_results, df_rolling=None, indices=["ndwi", "ndti", "
 
 
 
-# 2. Seasonal Plot
-
+# Seasonal Plot
 def plot_wqi_seasonal(monthly_avg, indices=["ndwi", "ndti", "ndci"], title="WQI Seasonal Cycle"):
     """
     Enhanced seasonal plot with separate mean/median panels + full 12-month axis.
@@ -115,7 +114,6 @@ def plot_wqi_seasonal(monthly_avg, indices=["ndwi", "ndti", "ndci"], title="WQI 
 
 
 # generating multi-Season Plot
-
 def plot_wqi_seasons(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI by Season"):
     """
     Plot WQI indices grouped by meteorological seasons (Winter, Spring, Summer, Fall).
@@ -148,9 +146,8 @@ def plot_wqi_seasons(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI by
 
 
 
-# -------------------------------
-# 4. Pie Chart Plot
-# -------------------------------
+
+# Pie Chart Plot
 def plot_wqi_pie_charts(df_results, indices=["ndwi", "ndti", "ndci"], title="WQI Pie Chart"):
     """
     Generate pie charts showing the fraction of positive vs negative index values.

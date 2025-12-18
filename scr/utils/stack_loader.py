@@ -1,4 +1,3 @@
-# stack_loader.py
 import numpy as np
 import stackstac
 from pystac_client import Client as StacClient
