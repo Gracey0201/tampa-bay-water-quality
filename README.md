@@ -79,7 +79,7 @@ docker rmi geog313-final-project
 | ------------------------------ | -------------------------------------------------------------------- |
 | `WQI.ipynb`                    | Compute NDWI, NDTI, and NDCI from Sentinel-2 imagery                 |
 | `WQI_precip_correlation.ipynb` | Correlation analysis between water quality indices and precipitation |
-| `WQI_spatial_maps.ipynb`       | Spatial mapping of water quality indices                             |
+| `WQI_spatial_maps.ipynb`       | Spatial mapping of water quality indices (pro                             |
 | `env_variables.ipynb`          | Aggregate SST and precipitation datasets                             |
 
 ***
@@ -87,15 +87,27 @@ docker rmi geog313-final-project
 
 | File                       | Description                                             |
 | -------------------------- | ------------------------------------------------------- |
-| `stack_loader.py`          | Loads and stacks STAC-based datasets using StackSTAC    |
+| `stack_loader.py`          | Loads sentinel-2 stack for fast map plotting    |
 | `WQI_utils.py`             | Functions to compute NDWI, NDTI, and NDCI               |
 | `env_variables_utils.py`   | SST and precipitation aggregation functions             |
 | `plots_utils.py`           | Time-series and comparative plotting functions          |
 | `spatial_utils.py`         | Spatial processing, mapping and hotspot detection       |
 
 ***
-#### Workflow Summary
-To manage computationally intensive tasks efficiently, the analysis was split across multiple notebooks. One notebook handles the computation and plotting of water quality indices, while another evaluates environmental variables using team-developed functions. A separate notebook generates spatial maps for both sets of data. Finally, the correlation analysis notebook reads the precomputed CSV outputs from the other notebooks, allowing exploration of relationships between water quality and environmental variables without rerunning the heavy computations, saving both time and memory.
+#### Notebooks and Functions Workflow Summary
+The analysis workflow is organized across multiple notebooks:
+
+- **Water Quality Indices (`WQI.ipynb`)**  
+  Uses the `WQI_utils` and `plots_utils` functions to compute and plot water quality indices.
+
+- **Environmental Variables (`env_variables.ipynb`)**  
+  Uses the `env_variables_utils` functions to evaluate environmental data.
+
+- **Spatial Maps (`WQI_spatial_maps.ipynb`)**  
+  Generates maps for water quality indices using `spatial_utils.py` and `stack_loader.py`.
+
+- **Correlation Analysis (`WQI_precip_correlation.ipynb`)**  
+  Reads precomputed CSV outputs from the other notebooks to explore relationships between water quality and environmental variables efficiently without rerunning heavy computations.
 
 ***
 ## Methods Summary
@@ -145,11 +157,26 @@ Despite these measures, full reproducibility still depends on external cloud ser
 ***
 
 #### Environmental Variables Documentation And Limitation
-Precipitation (NOAA MRMS QPE 24h Pass2)
+- Precipitation (NOAA MRMS QPE 24h Pass2)
 The noaa-mrms-qpe-24h-pass2 dataset provides high-resolution (1 km) quantitative precipitation estimates from NEXRAD radar networks across the contiguous U.S., updated every 24 hours with quality-controlled pass-2 processing. Temporal gaps in 2019-2020 often result from sparse radar coverage in coastal regions like Tampa Bay or delayed STAC ingestion.
 
-SST (surftemp-sst Zarr)
+- SST (surftemp-sst Zarr)
 The surftemp-sst Zarr dataset contains daily analyzed sea surface temperature fields derived from satellite infrared radiometers, stored in Kelvin units requiring conversion to Celsius (-273.15). NaN values occur in coastal/high-latitude areas due to missing Zarr tiles from cloud cover or land masking in the original satellite processing.
+
+- Due to the large number of missing values (NaNs) in the environmental variables, the correlation analysis was performed only on precipitation, which had complete data for the full year between 2023–2024. Consequently, the analysis focuses on this time period.
+***
+
+***
+### Results
+Tampa Bay Water Quality Assessment
+
+- The annual mean maps of NDWI, NDTI, and NDCI reveal spatially coherent patterns across Tampa Bay consistent with estuarine water processes. NDWI effectively delineates open bay waters from shorelines, confirming its utility as a water-masking index, while elevated NDTI values near coastal margins and river mouths indicate higher turbidity from sediment resuspension and riverine inflows. In contrast, central bay areas show lower turbidity, and NDCI highlights elevated chlorophyll concentrations in nearshore, semi-enclosed zones suggestive of nutrient enrichment and phytoplankton productivity.
+
+- The composite water quality risk map integrates these indices into a classification framework that highlights spatial vulnerability gradients. Low-risk areas (green) dominate deeper central bay waters with strong ocean exchange, while moderate-to-high risk zones (yellow-red) cluster along margins, tidal creeks, and estuaries where turbidity and chlorophyll signals converge. This pattern underscores nearshore environments' susceptibility to water quality degradation from reduced flushing and anthropogenic nutrient loading.
+
+- Annual mean composites effectively reduce short-term noise to reveal persistent spatial patterns, with index stacking providing multi-dimensional assessment superior to single-index analysis. The classification translates continuous spectral data into actionable risk categories suitable for monitoring, while spatial coherence across outputs validates preprocessing, masking, and computation accuracy.
+
+- These results demonstrate remote sensing indices' reliability for identifying coastal water quality gradients, with higher-risk shoreline/estuarine concentrations aligning with established nutrient dynamics and sediment transport understanding. This scalable multi-index framework supports environmental monitoring and identifies priority management areas in Tampa Bay and similar coastal systems.
 ***
 
 ***
@@ -158,7 +185,6 @@ In addition to using the lecture notes and resources (especially in creating fun
 ***
 
 ***
-
 #### Team Roles
 
 - **Grace Nwachukwu**
