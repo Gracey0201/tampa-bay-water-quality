@@ -49,3 +49,5 @@ scr/utils/*
 !scr/utils/plots_utils.py
 !scr/utils/env_variables_utils.py
 
+# Ignore root-level analysis script
+/analysis.py
