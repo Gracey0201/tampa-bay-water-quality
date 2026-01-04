@@ -30,16 +30,16 @@ You may either pull the Docker image from Dockerhub or build the image locally.
 
 #### 1. Pull or Build the Docker Image (recommended)
 ```bash
-docker pull geog313-final-project
+docker pull tampa-bay-water-quality
 ```
-Optionally, you can build the Docker image locally from the project folder
+Optionally, you can build the Docker image locally from the project folder.
 
 ```bash
-docker build -t geog313-final-project .
+docker build -t tampa-bay-water-quality .
 ```
 #### 2. Run the container
 ```bash
-docker run -it -p 8888:8888 -p 8787:8787 -v $(pwd):/home/jupyteruser/ --name wqi_container geog313-final-project
+docker run -it -p 8888:8888 -p 8787:8787 -v $(pwd):/home/jupyteruser/ --name wqi_container tampa-bay-water-quality
 
 ```
 - Port `8888` is used by JupyterLab
@@ -58,7 +58,7 @@ Inside JupyterLab, navigate to the `src/notebooks/` directory and open the noteb
 docker stop wqi_container
 ```
 
-### To Restart the Container Use
+### To Restart the Container, Use
 ```bash
 docker start -i wqi_container
 ```
@@ -69,7 +69,7 @@ docker rm wqi_container
 
 ### To Remove the Image Use
 ```bash
-docker rmi geog313-final-project
+docker rmi tampa-bay-water-quality
 ```
 ***
 
