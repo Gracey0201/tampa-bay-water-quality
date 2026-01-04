@@ -165,7 +165,6 @@ The NOAA-MRMS-QPE-24h-pass2 dataset provides high-resolution (1 km) quantitative
 The surftemp-sst Zarr dataset contains daily analyses of sea surface temperature fields derived from satellite infrared radiometers, stored in Kelvin and requiring conversion to Celsius (-273.15). NaN values occur in coastal/high-latitude areas due to missing Zarr tiles from cloud cover or land masking in the original satellite processing.
 
 - Due to the large number of missing values (NaNs) in the environmental variables, the correlation analysis was performed only on precipitation, which had complete data for the full year between 2023 and 2024. Consequently, the study focuses on this time period.
-***
 
 ***
 ### Results
@@ -178,7 +177,6 @@ Tampa Bay Water Quality Assessment
 - Annual mean composites effectively reduce short-term noise to reveal persistent spatial patterns, with index stacking providing a multi-dimensional assessment superior to single-index analysis. The classification translates continuous spectral data into actionable risk categories suitable for monitoring, while spatial coherence across outputs validates preprocessing, masking, and computation accuracy.
 
 - These results demonstrate remote sensing indices' reliability for identifying coastal water quality gradients, with higher-risk shoreline/estuarine concentrations aligning with established nutrient dynamics and sediment transport understanding. This scalable multi-index framework supports environmental monitoring and identifies priority management areas in Tampa Bay and similar coastal systems.
-***
 
 ***
 #### AI Use Policy
