@@ -8,7 +8,7 @@ This workflow demonstrates how satellite-derived indicators can support scalable
 
 ## Project Overview
 
-This project builds a modular, reproducible pipeline to link satellite‑derived water quality indices with large‑scale environmental drivers in Tampa Bay, Florida. It combines custom data-access functions, statistical analysis, and robust error handling to evaluate how sea surface temperature (SST) covaries with Sentinel‑2–based water-quality indicators (NDWI, NDTI, NDCI) over 2019–2022.[1]
+This project builds a modular, reproducible pipeline to link satellite‑derived water quality indices with large‑scale environmental drivers in Tampa Bay, Florida. It combines custom data-access functions, statistical analysis, and robust error handling to evaluate how sea surface temperature (SST) covaries with Sentinel‑2–based water-quality indicators (NDWI, NDTI, NDCI) during 2019–2022.[1]
 
 All analyses are implemented in Python using xarray, Dask, StackStac, and STAC APIs. The workflow is fully containerized with a Conda environment (including pip-installed packages) and a Docker image to ensure reproducibility.
 
@@ -22,7 +22,7 @@ Before running the project, ensure that you have the following installed on your
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/Gracey0201/tampa-bay-water-quality-remote-sensi.git
+git clone https://github.com/Gracey0201/tampa-bay-water-quality.git
 cd tampa-bay-water-quality
 ```
 
