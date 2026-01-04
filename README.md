@@ -1,4 +1,5 @@
 # Assessing Water Quality Dynamics and Environmental Drivers in Tampa Bay, Florida Using Remote Sensing
+This workflow demonstrates how satellite-derived indicators can support scalable coastal water-quality monitoring, with applications to environmental management, public health surveillance, and climate-adaptation planning in estuarine systems.
 
 **Authors:** Grace Nwachukwu and Kalu Okigwe  
 **Course:** GEOG 313 – Final Project  
@@ -7,9 +8,9 @@
 
 ## Project Overview
 
-This project builds a modular, reproducible pipeline to link satellite‑derived water quality indices with large‑scale environmental drivers in Tampa Bay, Florida. It combines custom data access functions, statistical analysis, and robust error handling to evaluate how sea surface temperature (SST) co‑varies with Sentinel‑2–based water quality indicators (NDWI, NDTI, NDCI) over 2019–2022.[1]
+This project builds a modular, reproducible pipeline to link satellite‑derived water quality indices with large‑scale environmental drivers in Tampa Bay, Florida. It combines custom data-access functions, statistical analysis, and robust error handling to evaluate how sea surface temperature (SST) covaries with Sentinel‑2–based water-quality indicators (NDWI, NDTI, NDCI) over 2019–2022.[1]
 
-All analysis is implemented in Python using xarray, dask, stackstac, and STAC APIs. The workflow is fully containerized with a Conda environment (including pip-installed packages) and a Docker image to ensure reproducibility.
+All analyses are implemented in Python using xarray, Dask, StackStac, and STAC APIs. The workflow is fully containerized with a Conda environment (including pip-installed packages) and a Docker image to ensure reproducibility.
 
 ***
 
@@ -21,8 +22,8 @@ Before running the project, ensure that you have the following installed on your
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/Gracey0201/geog313-assignments.git
-cd geog313-assignments/assignment-4
+git clone https://github.com/Gracey0201/tampa-bay-water-quality-remote-sensi.git
+cd tampa-bay-water-quality
 ```
 
 ### Steps to Run the Docker Container
@@ -91,7 +92,7 @@ docker rmi tampa-bay-water-quality
 | `WQI_utils.py`             | Functions to compute NDWI, NDTI, and NDCI               |
 | `env_variables_utils.py`   | SST and precipitation aggregation functions             |
 | `plots_utils.py`           | Time-series and comparative plotting functions          |
-| `spatial_utils.py`         | Spatial processing, mapping and hotspot detection       |
+| `spatial_utils.py`         | Spatial processing, mapping, and hotspot detection       |
 
 ***
 #### Notebooks and Functions Workflow Summary
@@ -107,7 +108,7 @@ The analysis workflow is organized across multiple notebooks:
   Generates maps for water quality indices using `spatial_utils.py` and `stack_loader.py`.
 
 - **Correlation Analysis (`WQI_precip_correlation.ipynb`)**  
-  Reads precomputed CSV outputs from the other notebooks to explore relationships between water quality and environmental variables efficiently without rerunning heavy computations.
+  Reads precomputed CSV outputs from other notebooks to efficiently explore relationships between water quality and environmental variables without rerunning computationally intensive computations.
 
 ***
 ## Methods Summary
@@ -133,9 +134,9 @@ The function returns a dictionary with SST as an `xarray.DataArray` and precipit
 - Aggregates indices to spatial means/medians per time step, builds a dataset of NDWI/NDTI/NDCI statistics, and converts to a pandas DataFrame with a datetime index.  
 - Computes rolling means over a user‑defined window and monthly climatologies for all indices.
 
-- To verify that the Sentinel‑2 inputs over Tampa Bay were suitable for water‑quality analysis, a diagnostics mode was implemented that inspects the first few scenes prior to index computation. For each of the first five acquisitions, the workflow reports the acquisition date and ID, thumbnail link, and metadata cloud cover, then uses the SCL band to quantify the fraction of cloud vs. water pixels and the number of valid observations. It also computes a scene‑average NDWI sanity check (green vs. NIR) to flag obviously contaminated scenes (e.g., strongly positive NDWI suggesting land or cloud influence). This diagnostic loop provides a quick, reproducible quality‑control snapshot of typical scenes and documents that the subsequent NDWI/NDTI/NDCI time series is based on predominantly cloud‑free water pixels rather than artifacts.
+- To verify that the Sentinel‑2 inputs over Tampa Bay were suitable for water‑quality analysis, a diagnostics mode was implemented that inspects the first few scenes before index computation. For each of the first five acquisitions, the workflow reports the acquisition date and ID, the thumbnail link, and the metadata cloud-cover value, then uses the SCL band to quantify the fraction of cloud versus water pixels and the number of valid observations. It also computes a scene‑average NDWI sanity check (green vs. NIR) to flag obviously contaminated scenes (e.g., strongly positive NDWI suggesting land or cloud influence). This diagnostic loop provides a quick, reproducible quality‑control snapshot of typical scenes and documents, and the subsequent NDWI/NDTI/NDCI time series is based predominantly on cloud‑free water pixels rather than artifacts.
 
-- To ensure a clean and physically meaningful water‑quality time series, the workflow uses strict daily sub‑sampling rather than multi‑scene mosaics. Sentinel‑2 scenes are first filtered to retain only observations with less than 20% eo:cloud_cover, removing heavily contaminated acquisitions. From the remaining scenes, only the single lowest‑cloud‑cover image for each date is kept, so there is at most one scene per day entering the analysis. This daily de‑duplication is applied before stacking and computing NDWI, NDTI, and NDCI for Tampa Bay. By avoiding mosaicking of multiple intra‑day scenes, the method prevents artificial smoothing and pixel mixing that could distort temporal variability in the indices. The result is a temporally consistent water‑quality time series in which changes reflect real environmental dynamics rather than artifacts of overlapping Sentinel‑2 acquisitions. 
+- To ensure a clean and physically meaningful water‑quality time series, the workflow uses strict daily sub‑sampling rather than multi‑scene mosaics. Sentinel‑2 scenes are first filtered to retain only observations with less than 20% eo:cloud_cover, removing heavily contaminated acquisitions. From the remaining scenes, only the lowest‑cloud‑cover image for each date is retained, so at most one scene per day enters the analysis. This daily deduplication is applied prior to stacking and computing NDWI, NDTI, and NDCI for Tampa Bay. By avoiding mosaicking of multiple intra‑day scenes, the method prevents artificial smoothing and pixel mixing that could distort temporal variability in the indices. The result is a temporally consistent water‑quality time series in which changes reflect fundamental environmental dynamics rather than artifacts of overlapping Sentinel‑2 acquisitions. 
 
 #### Literature justification
 - Griffiths et al. (2019) show that temporal compositing based on the single best‑quality observation per interval (e.g., daily or weekly) preserves phenology and land‑surface dynamics better than pixel‑based mosaics, which can mix acquisitions and introduce cross‑scene artifacts.
@@ -158,45 +159,45 @@ Despite these measures, full reproducibility still depends on external cloud ser
 
 #### Environmental Variables Documentation And Limitation
 - Precipitation (NOAA MRMS QPE 24h Pass2)
-The noaa-mrms-qpe-24h-pass2 dataset provides high-resolution (1 km) quantitative precipitation estimates from NEXRAD radar networks across the contiguous U.S., updated every 24 hours with quality-controlled pass-2 processing. Temporal gaps in 2019-2020 often result from sparse radar coverage in coastal regions like Tampa Bay or delayed STAC ingestion.
+The NOAA-MRMS-QPE-24h-pass2 dataset provides high-resolution (1 km) quantitative precipitation estimates from NEXRAD radar networks across the contiguous U.S., updated every 24 hours with quality-controlled pass-2 processing. Temporal gaps in 2019-2020 often result from sparse radar coverage in coastal regions such as Tampa Bay or from delayed STAC ingestion.
 
 - SST (surftemp-sst Zarr)
-The surftemp-sst Zarr dataset contains daily analyzed sea surface temperature fields derived from satellite infrared radiometers, stored in Kelvin units requiring conversion to Celsius (-273.15). NaN values occur in coastal/high-latitude areas due to missing Zarr tiles from cloud cover or land masking in the original satellite processing.
+The surftemp-sst Zarr dataset contains daily analyses of sea surface temperature fields derived from satellite infrared radiometers, stored in Kelvin and requiring conversion to Celsius (-273.15). NaN values occur in coastal/high-latitude areas due to missing Zarr tiles from cloud cover or land masking in the original satellite processing.
 
-- Due to the large number of missing values (NaNs) in the environmental variables, the correlation analysis was performed only on precipitation, which had complete data for the full year between 2023–2024. Consequently, the analysis focuses on this time period.
+- Due to the large number of missing values (NaNs) in the environmental variables, the correlation analysis was performed only on precipitation, which had complete data for the full year between 2023 and 2024. Consequently, the study focuses on this time period.
 ***
 
 ***
 ### Results
 Tampa Bay Water Quality Assessment
 
-- The annual mean maps of NDWI, NDTI, and NDCI reveal spatially coherent patterns across Tampa Bay consistent with estuarine water processes. NDWI effectively delineates open bay waters from shorelines, confirming its utility as a water-masking index, while elevated NDTI values near coastal margins and river mouths indicate higher turbidity from sediment resuspension and riverine inflows. In contrast, central bay areas show lower turbidity, and NDCI highlights elevated chlorophyll concentrations in nearshore, semi-enclosed zones suggestive of nutrient enrichment and phytoplankton productivity.
+- The annual mean maps of NDWI, NDTI, and NDCI reveal spatially coherent patterns across Tampa Bay consistent with estuarine water processes. NDWI effectively delineates open-bay waters from shorelines, confirming its utility as a water-masking index. In contrast, elevated NDTI values near coastal margins and river mouths indicate higher turbidity, driven by sediment resuspension and riverine inflows. In contrast, the central bay areas exhibit lower turbidity, and NDCI highlights elevated chlorophyll concentrations in nearshore, semi-enclosed zones, suggestive of nutrient enrichment and phytoplankton productivity.
 
-- The composite water quality risk map integrates these indices into a classification framework that highlights spatial vulnerability gradients. Low-risk areas (green) dominate deeper central bay waters with strong ocean exchange, while moderate-to-high risk zones (yellow-red) cluster along margins, tidal creeks, and estuaries where turbidity and chlorophyll signals converge. This pattern underscores nearshore environments' susceptibility to water quality degradation from reduced flushing and anthropogenic nutrient loading.
+- The composite water quality risk map integrates these indices into a classification framework that highlights spatial vulnerability gradients. Low-risk areas (green) dominate the deeper central bay waters, which experience strong ocean exchange. At the same time, moderate-to-high risk zones (yellow-red) cluster along margins, tidal creeks, and estuaries where turbidity and chlorophyll signals converge. This pattern underscores the susceptibility of nearshore environments to water-quality degradation due to reduced flushing and anthropogenic nutrient loading.
 
-- Annual mean composites effectively reduce short-term noise to reveal persistent spatial patterns, with index stacking providing multi-dimensional assessment superior to single-index analysis. The classification translates continuous spectral data into actionable risk categories suitable for monitoring, while spatial coherence across outputs validates preprocessing, masking, and computation accuracy.
+- Annual mean composites effectively reduce short-term noise to reveal persistent spatial patterns, with index stacking providing a multi-dimensional assessment superior to single-index analysis. The classification translates continuous spectral data into actionable risk categories suitable for monitoring, while spatial coherence across outputs validates preprocessing, masking, and computation accuracy.
 
 - These results demonstrate remote sensing indices' reliability for identifying coastal water quality gradients, with higher-risk shoreline/estuarine concentrations aligning with established nutrient dynamics and sediment transport understanding. This scalable multi-index framework supports environmental monitoring and identifies priority management areas in Tampa Bay and similar coastal systems.
 ***
 
 ***
 #### AI Use Policy
-In addition to using the lecture notes and resources (especially in creating functions), AI tools were also utilized both in generating codes, scripts (mostly generating utils) and documentations to support the development of this project. Howevwer, all AI-generated content has been carefully reviewed to ensure accuracy and correctness.
+In addition to using the lecture notes and resources (especially in creating functions), AI tools were also utilized both in generating codes, scripts (mostly generating utils) and documentations to support the development of this project. However, all AI-generated content has been carefully reviewed to ensure accuracy and correctness.
 ***
 
 ***
 #### Team Roles
 
 - **Grace Nwachukwu**
-  - Developed all functions and accompanied notebooks for water quality analysis, plots and maps .
+  - Developed all functions and accompanying notebooks for water quality analysis, plots, and maps.
   
 - **Kalu Okigwe**
-  - Developed functions and accompanied notebooks for environmental variables (SST and precipitation)analysis and plots.  
+  - Developed functions and accompanying notebooks for environmental variables (SST and precipitation)analysis and plots.  
 
 - **Joint**
   - Designed the integrated pipeline, Docker/conda setup.  
   - Wrote documentation and coordinated Git/GitHub workflow.
-  - produced the notebook and codes for the pearson correlation, RMSE, and PCA, plots.
+  - produced the notebook and codes for the Pearson correlation, RMSE, and PCA plots.
 ***
 
 #### References
