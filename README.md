@@ -181,7 +181,6 @@ Tampa Bay Water Quality Assessment
 ***
 #### AI Use Policy
 In addition to using the lecture notes and resources (especially in creating functions), AI tools were also utilized both in generating codes, scripts (mostly generating utils) and documentations to support the development of this project. However, all AI-generated content has been carefully reviewed to ensure accuracy and correctness.
-***
 
 ***
 #### Team Roles
