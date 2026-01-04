@@ -206,3 +206,13 @@ In addition to using the lecture notes and resources (especially in creating fun
 -  [ESA Sentinel-2 Documentation](https://documentation.dataspace.copernicus.eu/Data/SentinelMissions/Sentinel2.html)
 ***
 
+#### Cite This Work
+
+If you use this project in your research or publications, please cite it as:
+
+### Tampa Bay Water Quality Project
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18148374.svg)](https://doi.org/10.5281/zenodo.18148374)
+
+**Citation:**
+Nwachukwu, G., & Okigwe, K. (2026). *Assessing Water Quality Dynamics and Environmental Drivers in Tampa Bay, Florida Using Remote Sensing* [Software]. Zenodo. https://doi.org/10.5281/zenodo.18148374
+
