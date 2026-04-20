@@ -1,5 +1,5 @@
 # Assessing Water Quality Dynamics and Environmental Drivers in Tampa Bay, Florida Using Remote Sensing
-This workflow demonstrates how satellite-derived indicators can support scalable coastal water-quality monitoring, with applications to environmental management, public health surveillance, and climate-adaptation planning in estuarine systems.
+This project develops a reproducible geospatial analytics pipeline for monitoring coastal water quality using satellite remote sensing and environmental datasets. It demonstrates how scalable Earth observation workflows can support estuarine ecosystem monitoring, environmental risk assessment, and climate-informed decision-making.
 
 **Authors:** Grace Nwachukwu and Kalu Okigwe  
 **Course:** GEOG 313 – Final Project  
