@@ -8,14 +8,20 @@ This project develops a reproducible geospatial analytics pipeline for monitorin
 
 ## Project Overview
 
-This project builds a modular, reproducible pipeline to link satellite‑derived water quality indices with large‑scale environmental drivers in Tampa Bay, Florida. It combines custom data-access functions, statistical analysis, and robust error handling to evaluate how sea surface temperature (SST) covaries with Sentinel‑2–based water-quality indicators (NDWI, NDTI, NDCI) during 2019–2022.[1]
+This project designs and implements a modular geospatial data pipeline to analyze water quality dynamics in Tampa Bay, Florida, by integrating satellite-derived indicators with large-scale environmental drivers.
 
-All analyses are implemented in Python using xarray, Dask, StackStac, and STAC APIs. The workflow is fully containerized with a Conda environment (including pip-installed packages) and a Docker image to ensure reproducibility.
+The work addresses a key challenge in coastal monitoring: the need for consistent, high-frequency, and scalable methods to assess water quality across complex estuarine systems. To address this, the pipeline links Sentinel-2–derived water quality indices—NDWI, NDTI, and NDCI—with environmental variables including sea surface temperature (SST) and precipitation over the period 2019–2022.
+
+The workflow combines custom data-access functions, statistical analysis, and robust error handling to ensure reliable processing of large geospatial datasets. It leverages cloud-based geospatial technologies, including STAC APIs, StackSTAC, xarray, and Dask, enabling efficient querying, processing, and analysis of multi-temporal satellite imagery.
+
+All analyses are fully containerized using Docker and a Conda-based environment, ensuring reproducibility, portability, and scalability across computing environments.
+
+This work provides a transferable framework for coastal water quality monitoring that can be adapted to other regions, supporting environmental management, public health monitoring, and climate resilience planning.
 
 ***
 
 ### System Requirements
-Before running the project, ensure that you have the following installed on your machine:
+This project is fully containerized to ensure reproducibility across environments. Docker is required to run the project.
 
 - [Docker](https://docs.docker.com/get-started/get-docker/)
 
@@ -111,32 +117,86 @@ The analysis workflow is organized across multiple notebooks:
   Reads precomputed CSV outputs from other notebooks to efficiently explore relationships between water quality and environmental variables without rerunning computationally intensive computations.
 
 ***
+## Data Outputs
+
+### Generated Datasets
+
+| File | Description |
+|------|------------|
+| `indices_results.csv` | Sentinel-2 water quality indices (NDWI, NDTI, NDCI) |
+| `indices_rolling.csv` | Smoothed time-series using rolling averages |
+| `precip_monthly.csv` | Aggregated monthly precipitation |
+| `sst_monthly.csv` | Monthly sea surface temperature |
+| `env.csv` | Combined environmental dataset |
+
+***
+### Statistical and Exploratory Analysis
+
+To evaluate relationships within the processed dataset, a set of statistical and exploratory techniques was applied to the harmonised water quality and environmental variables.
+
+- **Pearson correlation analysis:**  
+  Used to quantify pairwise relationships between water quality indices (NDWI, NDTI, NDCI) and precipitation, enabling assessment of linear dependency structures.
+
+- **RMSE-based evaluation:**  
+  Root Mean Square Error (RMSE) is used to quantify divergence between precipitation patterns and water quality indices as a comparative variability measure.
+
+- **Principal Component Analysis (PCA):**  
+  Applied to standardised variables to identify dominant variance structures and reduce dimensional complexity across environmental inputs.
+
+- **Exploratory data analysis:**  
+  Boxplots and scatterplots are used to examine distributional characteristics, variability, and pairwise relationships across precipitation regimes.
+
+- **Seasonal aggregation analysis:**  
+  Monthly heatmaps are used to visualise intra-annual variability and seasonal patterns in water quality dynamics.
+
+Together, these methods provide a multi-perspective evaluation of environmental relationships, combining correlation, dimensionality reduction, and distributional analysis.
+
+***
 ## Methods Summary
 
-### Environmental data (env_utils.py)
+This project implements a modular geospatial analytics pipeline for processing satellite-derived water quality and environmental datasets. The system is designed for reproducibility, scalability, and robust handling of remote sensing data uncertainty.
 
-`environmental_variables` provides a generic interface to environmental drivers:
+---
 
-- Opens a public SST Zarr store with `xarray.open_zarr`, selecting the correct variable name (`analysed_sst` or `sst`) depending on the product.  
-- Subsets SST in space (Tampa Bay bounding box) and time, converts from Kelvin to Celsius when needed, computes spatial means, and resamples to monthly means.  
-- Uses the Planetary Computer STAC API to search MRMS precipitation items over the same bbox/time window, handling time ranges year‑by‑year to avoid long requests and wrapping calls in `try/except` to catch timeouts.[1]
+### Environmental Data Processing (`env_utils.py`)
 
-The function returns a dictionary with SST as an `xarray.DataArray` and precipitation as a list of STAC `Item`s or `None`.
+Environmental drivers (sea surface temperature and precipitation) are integrated through a unified data-access layer built using `xarray` and STAC APIs.
 
-### Water quality indices (WQI_utils.py)
+- Sea surface temperature (SST) is accessed from a public Zarr store using `xarray.open_zarr`, with dynamic variable handling depending on dataset structure.
+- Spatial subsetting is applied using the Tampa Bay bounding box, followed by temporal filtering and resampling to monthly means to reduce noise and ensure temporal comparability.
+- Precipitation data is retrieved via the Planetary Computer STAC API, with a year-by-year query strategy to avoid request timeouts and improve reliability over long temporal ranges.
+- Error handling (`try/except`) is implemented to ensure pipeline resilience against missing or delayed remote data.
 
-`compute_wqi_indices` implements the Sentinel‑2 WQI pipeline:
+This layer ensures consistent preprocessing of heterogeneous environmental datasets prior to integration with satellite-derived indices.
 
-- Queries Sentinel‑2 L2A scenes via Earth Search STAC for a Tampa Bay bounding box and date range.  
-- Filters scenes by cloud cover threshold (e.g., `< 20%`) before stacking.  
-- Uses `stackstac.stack` to build a lazy 4‑D array over bands `green`, `red`, `nir`, `rededge1`, and `scl`.  
-- Computes NDWI, NDTI, and NDCI via a normalized difference function and applies an SCL‑based water mask (classes 5–6) to focus on water pixels.  
-- Aggregates indices to spatial means/medians per time step, builds a dataset of NDWI/NDTI/NDCI statistics, and converts to a pandas DataFrame with a datetime index.  
-- Computes rolling means over a user‑defined window and monthly climatologies for all indices.
+---
 
-- To verify that the Sentinel‑2 inputs over Tampa Bay were suitable for water‑quality analysis, a diagnostics mode was implemented that inspects the first few scenes before index computation. For each of the first five acquisitions, the workflow reports the acquisition date and ID, the thumbnail link, and the metadata cloud-cover value, then uses the SCL band to quantify the fraction of cloud versus water pixels and the number of valid observations. It also computes a scene‑average NDWI sanity check (green vs. NIR) to flag obviously contaminated scenes (e.g., strongly positive NDWI suggesting land or cloud influence). This diagnostic loop provides a quick, reproducible quality‑control snapshot of typical scenes and documents, and the subsequent NDWI/NDTI/NDCI time series is based predominantly on cloud‑free water pixels rather than artifacts.
+### Water Quality Index Computation (`WQI_utils.py`)
 
-- To ensure a clean and physically meaningful water‑quality time series, the workflow uses strict daily sub‑sampling rather than multi‑scene mosaics. Sentinel‑2 scenes are first filtered to retain only observations with less than 20% eo:cloud_cover, removing heavily contaminated acquisitions. From the remaining scenes, only the lowest‑cloud‑cover image for each date is retained, so at most one scene per day enters the analysis. This daily deduplication is applied prior to stacking and computing NDWI, NDTI, and NDCI for Tampa Bay. By avoiding mosaicking of multiple intra‑day scenes, the method prevents artificial smoothing and pixel mixing that could distort temporal variability in the indices. The result is a temporally consistent water‑quality time series in which changes reflect fundamental environmental dynamics rather than artifacts of overlapping Sentinel‑2 acquisitions. 
+Water quality indicators (NDWI, NDTI, NDCI) are derived from Sentinel-2 Level-2A imagery using a fully cloud-filtered, analysis-ready workflow.
+
+- Sentinel-2 scenes are queried via the Earth Search STAC API for a defined spatial and temporal extent.
+- A cloud cover threshold (<20%) is applied to remove contaminated observations prior to analysis.
+- Image stacks are constructed using `stackstac`, enabling lazy loading of spectral bands (green, red, NIR, red-edge, SCL).
+- Spectral indices are computed using normalized band ratios, with water pixels isolated using Scene Classification Layer (SCL) masks.
+- Outputs are aggregated into spatial statistics (mean and median) per acquisition date, forming a time series structure.
+- Rolling means and monthly climatologies are applied to reduce high-frequency noise and enable seasonal pattern detection.
+
+A built-in quality control module evaluates scene reliability by analyzing cloud fraction, water pixel distribution, and NDWI sanity checks before inclusion in the final time series.
+
+To ensure temporal consistency, a strict daily selection strategy is applied where only the lowest-cloud scene per day is retained, preventing duplication effects from multi-scene mosaicking and preserving natural variability in the signal.
+
+---
+
+###### Analytical Data Integration Layer
+
+To enable consistent cross-variable analysis, an integrated dataset was constructed by aligning satellite-derived water quality indicators with environmental drivers on a common temporal scale.
+
+- Sentinel-2 water quality indices and precipitation data are aggregated to a monthly resolution and merged into a unified analytical dataset to ensure temporal alignment across heterogeneous sources.
+- Feature standardisation is applied to ensure comparability across variables with different measurement scales prior to statistical evaluation.
+- The resulting dataset is structured to support downstream exploratory and multivariate analysis of environmental relationships.
+
+This layer provides a consistent analytical interface for evaluating relationships between remotely sensed water quality signals and environmental forcing variables.
 
 #### Literature justification
 - Griffiths et al. (2019) show that temporal compositing based on the single best‑quality observation per interval (e.g., daily or weekly) preserves phenology and land‑surface dynamics better than pixel‑based mosaics, which can mix acquisitions and introduce cross‑scene artifacts.
@@ -177,10 +237,6 @@ Tampa Bay Water Quality Assessment
 - Annual mean composites effectively reduce short-term noise to reveal persistent spatial patterns, with index stacking providing a multi-dimensional assessment superior to single-index analysis. The classification translates continuous spectral data into actionable risk categories suitable for monitoring, while spatial coherence across outputs validates preprocessing, masking, and computation accuracy.
 
 - These results demonstrate remote sensing indices' reliability for identifying coastal water quality gradients, with higher-risk shoreline/estuarine concentrations aligning with established nutrient dynamics and sediment transport understanding. This scalable multi-index framework supports environmental monitoring and identifies priority management areas in Tampa Bay and similar coastal systems.
-
-***
-#### AI Use Policy
-In addition to using the lecture notes and resources (especially in creating functions), AI tools were also utilized both in generating codes, scripts (mostly generating utils) and documentations to support the development of this project. However, all AI-generated content has been carefully reviewed to ensure accuracy and correctness.
 
 ***
 #### Team Roles
