@@ -2,7 +2,7 @@
 This project develops a reproducible geospatial analytics pipeline for monitoring coastal water quality using satellite remote sensing and environmental datasets. It demonstrates how scalable Earth observation workflows can support estuarine ecosystem monitoring, environmental risk assessment, and climate-informed decision-making.
 
 **Authors:** Grace Nwachukwu and Kalu Okigwe  
-**Course:** GEOG 313 – Final Project  
+**Project Type:** End-to-End Geospatial Analytics Pipeline for Coastal Environmental Monitoring 
 
 ***
 
@@ -101,7 +101,7 @@ docker rmi tampa-bay-water-quality
 | `spatial_utils.py`         | Spatial processing, mapping, and hotspot detection       |
 
 ***
-#### Notebooks and Functions Workflow Summary
+### Notebooks and Functions Workflow Summary
 The analysis workflow is organized across multiple notebooks:
 
 - **Water Quality Indices (`WQI.ipynb`)**  
@@ -130,28 +130,6 @@ The analysis workflow is organized across multiple notebooks:
 | `env.csv` | Combined environmental dataset |
 
 ***
-### Statistical and Exploratory Analysis
-
-To evaluate relationships within the processed dataset, a set of statistical and exploratory techniques was applied to the harmonised water quality and environmental variables.
-
-- **Pearson correlation analysis:**  
-  Used to quantify pairwise relationships between water quality indices (NDWI, NDTI, NDCI) and precipitation, enabling assessment of linear dependency structures.
-
-- **RMSE-based evaluation:**  
-  Root Mean Square Error (RMSE) is used to quantify divergence between precipitation patterns and water quality indices as a comparative variability measure.
-
-- **Principal Component Analysis (PCA):**  
-  Applied to standardised variables to identify dominant variance structures and reduce dimensional complexity across environmental inputs.
-
-- **Exploratory data analysis:**  
-  Boxplots and scatterplots are used to examine distributional characteristics, variability, and pairwise relationships across precipitation regimes.
-
-- **Seasonal aggregation analysis:**  
-  Monthly heatmaps are used to visualise intra-annual variability and seasonal patterns in water quality dynamics.
-
-Together, these methods provide a multi-perspective evaluation of environmental relationships, combining correlation, dimensionality reduction, and distributional analysis.
-
-***
 ## Methods Summary
 
 This project implements a modular geospatial analytics pipeline for processing satellite-derived water quality and environmental datasets. The system is designed for reproducibility, scalability, and robust handling of remote sensing data uncertainty.
@@ -173,42 +151,46 @@ Water quality indicators (NDWI, NDTI, NDCI) are derived from Sentinel-2 Level-2A
 
 - Sentinel-2 scenes are queried via the Earth Search STAC API for a defined spatial and temporal extent.
 - A cloud cover threshold (<20%) is applied to remove contaminated observations prior to analysis.
-- Image stacks are constructed using `stackstac`, enabling lazy loading of spectral bands (green, red, NIR, red-edge, SCL).
+- Image stacks are constructed using stackstac, enabling lazy loading of spectral bands (green, red, NIR, red-edge, SCL).
 - Spectral indices are computed using normalized band ratios, with water pixels isolated using Scene Classification Layer (SCL) masks.
 - Outputs are aggregated into spatial statistics (mean and median) per acquisition date, forming a time series structure.
 - Rolling means and monthly climatologies are applied to reduce high-frequency noise and enable seasonal pattern detection.
+- A built-in quality control module evaluates scene reliability by analyzing cloud fraction, water pixel distribution, and NDWI sanity checks before inclusion in the final time series.
+- A strict daily selection strategy is applied where only the lowest-cloud scene per day is retained, preventing duplication effects from multi-scene mosaicking and preserving natural variability in the signal.
 
-A built-in quality control module evaluates scene reliability by analyzing cloud fraction, water pixel distribution, and NDWI sanity checks before inclusion in the final time series.
+#### Rationale for temporal filtering and single-scene selection:
+Temporal compositing using a single high-quality observation per time step preserves environmental signals more effectively than mosaicking approaches, which can introduce cross-scene artifacts and distort temporal dynamics (Griffiths et al., 2019).
+Harmonized Landsat–Sentinel studies show that single-date, quality-filtered observations improve water index consistency by avoiding geometric and illumination mixing effects (Li & Roy, 2017).
+Copernicus Sentinel-2 processing guidance recommends per-time-step filtering rather than mosaicking for indices such as NDWI, NDTI, and NDCI to maintain physical interpretability under cloud-contaminated conditions.
 
-To ensure temporal consistency, a strict daily selection strategy is applied where only the lowest-cloud scene per day is retained, preventing duplication effects from multi-scene mosaicking and preserving natural variability in the signal.
+### Analytical Data Integration and Statistical Analysis Module
+To enable cross-variable analysis, satellite-derived water quality indicators were integrated with environmental drivers on a common monthly temporal scale.
 
-### Analytical Data Integration Layer
+Sentinel-2 indices (NDWI, NDTI, NDCI) and precipitation data were resampled to monthly resolution and transformed to ensure comparability across differing measurement scales.
 
-To enable consistent cross-variable analysis, an integrated dataset was constructed by aligning satellite-derived water quality indicators with environmental drivers on a common temporal scale.
+This produces a consistent dataset for evaluating relationships between remotely sensed water quality dynamics and environmental forcing.
 
-- Sentinel-2 water quality indices and precipitation data are aggregated to a monthly resolution and merged into a unified analytical dataset to ensure temporal alignment across heterogeneous sources.
-- Feature standardisation is applied to ensure comparability across variables with different measurement scales prior to statistical evaluation.
-- The resulting dataset is structured to support downstream exploratory and multivariate analysis of environmental relationships.
+A combined statistical and exploratory framework was then applied:
 
-This layer provides a consistent analytical interface for evaluating relationships between remotely sensed water quality signals and environmental forcing variables.
+- Pearson correlation analysis: Quantifies linear relationships between water quality indices and precipitation, enabling assessment of dependency structures.
+- RMSE evaluation: Measures divergence between precipitation patterns and water quality variability as a comparative metric.
+- Principal Component Analysis (PCA): Identifies dominant variance structures and reduces dimensional complexity across multivariate inputs.
+- Exploratory analysis: Boxplots and scatterplots are used to assess variability, distributional structure, and pairwise relationships.
+- Seasonal aggregation: Monthly heatmaps are used to visualise intra-annual and seasonal variability in water quality dynamics.
+
+Together, these methods provide a multi-scale analytical framework combining correlation analysis, dimensionality reduction, and distributional exploration of environmental relationships.
 ***
 
-### Literature justification
-- Griffiths et al. (2019) show that temporal compositing based on the single best‑quality observation per interval (e.g., daily or weekly) preserves phenology and land‑surface dynamics better than pixel‑based mosaics, which can mix acquisitions and introduce cross‑scene artifacts.
-- Li & Roy (2017) and related work on harmonized Landsat–Sentinel data demonstrate that single‑date, quality‑filtered observations are preferred for water‑index time series because mosaicking can smooth signals and mix viewing/illumination geometries, degrading change‑detection performance.
-- Copernicus Sentinel‑2 processing guidance recommends temporal filtering to one acquisition per time step for consistent analysis of indices such as NDWI, NDTI, and NDCI, rather than relying on automatic mosaicking, especially when intra‑orbit variability and cloud contamination are concerns
-
-***
 ### Error Handling and Limitations
 
 Two key external issues were observed:
 
 1. **Duplicate / non‑unique time coordinates**  
-   Selecting by time (`sel(time=dt, method="nearest")`) can raise “Reindexing only valid with uniquely valued Index objects” when time coordinates are duplicated. The diagnostics in `compute_wqi_indices` were updated to catch these errors and either skip SCL/NDWI diagnostics for problematic timestamps or print a clear message instead of failing.[6][5]
+   Selecting by time (`sel(time=dt, method="nearest")`) can raise “Reindexing only valid with uniquely valued Index objects” when time coordinates are duplicated. The diagnostics in `compute_wqi_indices` were updated to catch these errors and either skip SCL/NDWI diagnostics for problematic timestamps or print a clear message instead of failing.
 
 2. **Remote COG access errors (CURL “Recv failure”)**  
-   During `ds_ts.compute()`, some Sentinel‑2 COG reads through `stackstac` fail with `RasterioIOError: CURL error: Recv failure: Connection reset by peer`. These are transient remote host/network issues rather than logic bugs. To mitigate them, the code and documentation recommend reducing `max_items`, narrowing the time window, re‑running cells, and optionally wrapping `.compute()` in a `try/except` block to convert hard failures into warnings.[7][1]
-
+   During `ds_ts.compute()`, some Sentinel‑2 COG reads through `stackstac` fail with `RasterioIOError: CURL error: Recv failure: Connection reset by peer`. These are transient remote host/network issues rather than logic bugs. To mitigate them, the code and documentation recommend reducing `max_items`, narrowing the time window, re‑running cells, and optionally wrapping `.compute()` in a `try/except` block to convert hard failures into warnings.
+   
 Despite these measures, full reproducibility still depends on external cloud services (Earth Search, Sentinel‑COGs, Planetary Computer) being available and responsive at runtime.
 ***
 
@@ -222,39 +204,44 @@ The surftemp-sst Zarr dataset contains daily analyses of sea surface temperature
 - Due to the large number of missing values (NaNs) in the environmental variables, the correlation analysis was performed only on precipitation, which had complete data for the full year between 2023 and 2024. Consequently, the study focuses on this time period.
 
 ***
-### Results
-Tampa Bay Water Quality Assessment
+## Results
+- Annual composite products of NDWI, NDTI, and NDCI were generated from Sentinel-2 imagery to quantify spatial and temporal variability in Tampa Bay coastal water quality.
 
-- The annual mean maps of NDWI, NDTI, and NDCI reveal spatially coherent patterns across Tampa Bay consistent with estuarine water processes. NDWI effectively delineates open-bay waters from shorelines, confirming its utility as a water-masking index. In contrast, elevated NDTI values near coastal margins and river mouths indicate higher turbidity, driven by sediment resuspension and riverine inflows. In contrast, the central bay areas exhibit lower turbidity, and NDCI highlights elevated chlorophyll concentrations in nearshore, semi-enclosed zones, suggestive of nutrient enrichment and phytoplankton productivity.
+- NDWI output reliably delineates land–water boundaries, enabling robust masking for downstream geospatial analysis.
 
-- The composite water quality risk map integrates these indices into a classification framework that highlights spatial vulnerability gradients. Low-risk areas (green) dominate the deeper central bay waters, which experience strong ocean exchange. At the same time, moderate-to-high risk zones (yellow-red) cluster along margins, tidal creeks, and estuaries where turbidity and chlorophyll signals converge. This pattern underscores the susceptibility of nearshore environments to water-quality degradation due to reduced flushing and anthropogenic nutrient loading.
+- NDTI identifies persistent turbidity hotspots associated with sediment resuspension at riverine inflows.
 
-- Annual mean composites effectively reduce short-term noise to reveal persistent spatial patterns, with index stacking providing a multi-dimensional assessment superior to single-index analysis. The classification translates continuous spectral data into actionable risk categories suitable for monitoring, while spatial coherence across outputs validates preprocessing, masking, and computation accuracy.
+- NDCI captures chlorophyll variability, with elevated concentrations concentrated in semi-enclosed nearshore zones, indicating nutrient enrichment and phytoplankton activity.
 
-- These results demonstrate remote sensing indices' reliability for identifying coastal water quality gradients, with higher-risk shoreline/estuarine concentrations aligning with established nutrient dynamics and sediment transport understanding. This scalable multi-index framework supports environmental monitoring and identifies priority management areas in Tampa Bay and similar coastal systems.
+- A multi-index classification system was implemented to generate spatial water quality risk zones (low–high) across the estuary.
 
+- Low-risk zones are primarily located in deeper offshore waters with stronger hydrodynamic exchange, while higher-risk zones cluster along tidal creeks, estuarine boundaries, and coastal margins where turbidity and chlorophyll signals co-occur, indicating reduced flushing capacity and elevated environmental stress.
+
+- Temporal aggregation of annual composites reduces atmospheric noise and short-term variability, producing stable and physically consistent spatial patterns suitable for scalable coastal water quality monitoring and environmental assessment.
 ***
-#### Team Roles
+### Technical Contributions
+This project was developed collaboratively, with shared responsibility across data engineering, geospatial processing, and analytical system design.
 
 - **Grace Nwachukwu**
-  - Developed all functions and accompanying notebooks for water quality analysis, plots, and maps.
+  - Developed core geospatial processing functions and analysis notebooks for water quality extraction, visualisation, and spatial mapping of Sentinel-2–derived indices.
   
 - **Kalu Okigwe**
-  - Developed functions and accompanying notebooks for environmental variables (SST and precipitation)analysis and plots.  
+  - Developed environmental data processing functions and analysis notebooks for sea surface temperature (SST) and precipitation datasets, including data cleaning, aggregation, and visualisation workflows.
 
 - **Joint**
-  - Designed the integrated pipeline, Docker/conda setup.  
-  - Wrote documentation and coordinated Git/GitHub workflow.
-  - produced the notebook and codes for the Pearson correlation, RMSE, and PCA plots.
+  - Designed and implemented the end-to-end geospatial analytics pipeline integrating satellite-derived and environmental datasets.
+  - Built the reproducible computational environment using Docker and Conda for portability and deployment consistency.
+  - Developed analytical workflows for correlation analysis (Pearson), error quantification (RMSE), and dimensionality reduction (PCA).
+  - Coordinated Git/GitHub workflow, documentation structure, and version-controlled project organisation.
 ***
 
-### References
+## References
 - Griffiths, P., Nendel, C., & Hostert, P. (2019). Intra-annual reflectance composites from Sentinel-2 and Landsat for national-scale crop and land cover mapping. Remote sensing of environment, 220, 135-151.
 - Ju, J., Zhou, Q., Freitag, B., Roy, D. P., Zhang, H. K., Sridhar, M., ... & Neigh, C. S. (2025). The Harmonized Landsat and Sentinel-2 version 2.0 surface reflectance dataset. Remote Sensing of Environment, 324, 114723.
 -  [ESA Sentinel-2 Documentation](https://documentation.dataspace.copernicus.eu/Data/SentinelMissions/Sentinel2.html)
 ***
 
-### Citation
+## Citation
 
 If you use this project in your research or publications, please cite it as:
 
