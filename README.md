@@ -156,8 +156,6 @@ Together, these methods provide a multi-perspective evaluation of environmental 
 
 This project implements a modular geospatial analytics pipeline for processing satellite-derived water quality and environmental datasets. The system is designed for reproducibility, scalability, and robust handling of remote sensing data uncertainty.
 
----
-
 ### Environmental Data Processing (`env_utils.py`)
 
 Environmental drivers (sea surface temperature and precipitation) are integrated through a unified data-access layer built using `xarray` and STAC APIs.
@@ -168,8 +166,6 @@ Environmental drivers (sea surface temperature and precipitation) are integrated
 - Error handling (`try/except`) is implemented to ensure pipeline resilience against missing or delayed remote data.
 
 This layer ensures consistent preprocessing of heterogeneous environmental datasets prior to integration with satellite-derived indices.
-
----
 
 ### Water Quality Index Computation (`WQI_utils.py`)
 
@@ -186,9 +182,7 @@ A built-in quality control module evaluates scene reliability by analyzing cloud
 
 To ensure temporal consistency, a strict daily selection strategy is applied where only the lowest-cloud scene per day is retained, preventing duplication effects from multi-scene mosaicking and preserving natural variability in the signal.
 
----
-
-###### Analytical Data Integration Layer
+### Analytical Data Integration Layer
 
 To enable consistent cross-variable analysis, an integrated dataset was constructed by aligning satellite-derived water quality indicators with environmental drivers on a common temporal scale.
 
@@ -197,14 +191,15 @@ To enable consistent cross-variable analysis, an integrated dataset was construc
 - The resulting dataset is structured to support downstream exploratory and multivariate analysis of environmental relationships.
 
 This layer provides a consistent analytical interface for evaluating relationships between remotely sensed water quality signals and environmental forcing variables.
+***
 
-#### Literature justification
+### Literature justification
 - Griffiths et al. (2019) show that temporal compositing based on the single best‑quality observation per interval (e.g., daily or weekly) preserves phenology and land‑surface dynamics better than pixel‑based mosaics, which can mix acquisitions and introduce cross‑scene artifacts.
 - Li & Roy (2017) and related work on harmonized Landsat–Sentinel data demonstrate that single‑date, quality‑filtered observations are preferred for water‑index time series because mosaicking can smooth signals and mix viewing/illumination geometries, degrading change‑detection performance.
 - Copernicus Sentinel‑2 processing guidance recommends temporal filtering to one acquisition per time step for consistent analysis of indices such as NDWI, NDTI, and NDCI, rather than relying on automatic mosaicking, especially when intra‑orbit variability and cloud contamination are concerns
 
 ***
-#### Error Handling and Limitations
+### Error Handling and Limitations
 
 Two key external issues were observed:
 
@@ -217,7 +212,7 @@ Two key external issues were observed:
 Despite these measures, full reproducibility still depends on external cloud services (Earth Search, Sentinel‑COGs, Planetary Computer) being available and responsive at runtime.
 ***
 
-#### Environmental Variables Documentation And Limitation
+### Environmental Variables Documentation And Limitation
 - Precipitation (NOAA MRMS QPE 24h Pass2)
 The NOAA-MRMS-QPE-24h-pass2 dataset provides high-resolution (1 km) quantitative precipitation estimates from NEXRAD radar networks across the contiguous U.S., updated every 24 hours with quality-controlled pass-2 processing. Temporal gaps in 2019-2020 often result from sparse radar coverage in coastal regions such as Tampa Bay or from delayed STAC ingestion.
 
@@ -253,13 +248,13 @@ Tampa Bay Water Quality Assessment
   - produced the notebook and codes for the Pearson correlation, RMSE, and PCA plots.
 ***
 
-#### References
+### References
 - Griffiths, P., Nendel, C., & Hostert, P. (2019). Intra-annual reflectance composites from Sentinel-2 and Landsat for national-scale crop and land cover mapping. Remote sensing of environment, 220, 135-151.
 - Ju, J., Zhou, Q., Freitag, B., Roy, D. P., Zhang, H. K., Sridhar, M., ... & Neigh, C. S. (2025). The Harmonized Landsat and Sentinel-2 version 2.0 surface reflectance dataset. Remote Sensing of Environment, 324, 114723.
 -  [ESA Sentinel-2 Documentation](https://documentation.dataspace.copernicus.eu/Data/SentinelMissions/Sentinel2.html)
 ***
 
-#### Citation
+### Citation
 
 If you use this project in your research or publications, please cite it as:
 
